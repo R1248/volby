@@ -1,24 +1,54 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { useEffect } from 'react';
+import * as NavigationBar from 'expo-navigation-bar';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
+import { AppState, Platform, StatusBar as NativeStatusBar } from 'react-native';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { useGameStore } from '@/src/store/useGameStore';
+import { colors } from '@/src/theme/colors';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const hydrateGame = useGameStore((state) => state.hydrateGame);
+
+  useEffect(() => {
+    void hydrateGame();
+  }, [hydrateGame]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    const hideSystemBars = () => {
+      NativeStatusBar.setHidden(true, 'fade');
+      void NavigationBar.setVisibilityAsync('hidden');
+    };
+
+    hideSystemBars();
+
+    const interval = setInterval(hideSystemBars, 2500);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        hideSystemBars();
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <>
+      <Stack
+        screenOptions={{
+          animation: 'fade',
+          contentStyle: { backgroundColor: colors.background },
+          headerShown: false,
+        }}
+      />
+      <ExpoStatusBar hidden />
+    </>
   );
 }

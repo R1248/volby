@@ -1,0 +1,501 @@
+const krajProfileData = {
+  "kraje": [
+    {
+      "id": "CZ010",
+      "name": "Hlavni mesto Praha",
+      "nuts2Id": "CZ01",
+      "defaultMetroArea": "praha",
+      "regionId": "praha"
+    },
+    {
+      "id": "CZ020",
+      "name": "Stredocesky kraj",
+      "nuts2Id": "CZ02",
+      "defaultMetroArea": "none",
+      "regionId": "stredocesky"
+    },
+    {
+      "id": "CZ031",
+      "name": "Jihocesky kraj",
+      "nuts2Id": "CZ03",
+      "defaultMetroArea": "none",
+      "regionId": "jihocesky"
+    },
+    {
+      "id": "CZ032",
+      "name": "Plzensky kraj",
+      "nuts2Id": "CZ03",
+      "defaultMetroArea": "plzen",
+      "regionId": "plzensky"
+    },
+    {
+      "id": "CZ041",
+      "name": "Karlovarsky kraj",
+      "nuts2Id": "CZ04",
+      "defaultMetroArea": "none",
+      "regionId": "karlovarsky"
+    },
+    {
+      "id": "CZ042",
+      "name": "Ustecky kraj",
+      "nuts2Id": "CZ04",
+      "defaultMetroArea": "none",
+      "regionId": "ustecky"
+    },
+    {
+      "id": "CZ051",
+      "name": "Liberecky kraj",
+      "nuts2Id": "CZ05",
+      "defaultMetroArea": "liberec",
+      "regionId": "liberecky"
+    },
+    {
+      "id": "CZ052",
+      "name": "Kralovehradecky kraj",
+      "nuts2Id": "CZ05",
+      "defaultMetroArea": "hradec_pardubice",
+      "regionId": "kralovehradecky"
+    },
+    {
+      "id": "CZ053",
+      "name": "Pardubicky kraj",
+      "nuts2Id": "CZ05",
+      "defaultMetroArea": "hradec_pardubice",
+      "regionId": "pardubicky"
+    },
+    {
+      "id": "CZ063",
+      "name": "Kraj Vysocina",
+      "nuts2Id": "CZ06",
+      "defaultMetroArea": "none",
+      "regionId": "vysocina"
+    },
+    {
+      "id": "CZ064",
+      "name": "Jihomoravsky kraj",
+      "nuts2Id": "CZ06",
+      "defaultMetroArea": "brno",
+      "regionId": "jihomoravsky"
+    },
+    {
+      "id": "CZ071",
+      "name": "Olomoucky kraj",
+      "nuts2Id": "CZ07",
+      "defaultMetroArea": "olomouc",
+      "regionId": "olomoucky"
+    },
+    {
+      "id": "CZ072",
+      "name": "Zlinsky kraj",
+      "nuts2Id": "CZ07",
+      "defaultMetroArea": "none",
+      "regionId": "zlinsky"
+    },
+    {
+      "id": "CZ080",
+      "name": "Moravskoslezsky kraj",
+      "nuts2Id": "CZ08",
+      "defaultMetroArea": "ostrava",
+      "regionId": "moravskoslezsky"
+    }
+  ],
+  "profiles": [
+    {
+      "krajId": "CZ010",
+      "krajName": "Hlavni mesto Praha",
+      "nuts2Id": "CZ01",
+      "electorateWeightWithinNuts2": 1,
+      "urbanityProfile": {
+        "rural": 0,
+        "town": 0,
+        "large_town": 0.1,
+        "metro": 0.9
+      },
+      "educationProfile": {
+        "lower": 0.1,
+        "secondary": 0.45,
+        "tertiary": 0.45
+      },
+      "ageProfile": {
+        "15_24": 0.1,
+        "25_39": 0.28,
+        "40_54": 0.27,
+        "55_plus": 0.35
+      },
+      "latentProfileHint": {
+        "culture": -0.25,
+        "globalism": 0.25,
+        "establishment": 0.15,
+        "green": 0.1
+      },
+      "metroAreaShares": {
+        "praha": 1
+      },
+      "notes": "Synthetic gameplay profile: metro, educated, globalist/liberal composition."
+    },
+    {
+      "krajId": "CZ020",
+      "krajName": "Stredocesky kraj",
+      "nuts2Id": "CZ02",
+      "electorateWeightWithinNuts2": 1,
+      "urbanityProfile": {
+        "rural": 0.28,
+        "town": 0.44,
+        "large_town": 0.26,
+        "metro": 0.02
+      },
+      "educationProfile": {
+        "lower": 0.17,
+        "secondary": 0.61,
+        "tertiary": 0.22
+      },
+      "ageProfile": {
+        "15_24": 0.09,
+        "25_39": 0.24,
+        "40_54": 0.3,
+        "55_plus": 0.37
+      },
+      "latentProfileHint": {
+        "culture": -0.03,
+        "globalism": 0.05,
+        "green_deal": 0.02
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: Prague commuter belt plus towns and rural areas."
+    },
+    {
+      "krajId": "CZ031",
+      "krajName": "Jihocesky kraj",
+      "nuts2Id": "CZ03",
+      "electorateWeightWithinNuts2": 0.55,
+      "urbanityProfile": {
+        "rural": 0.38,
+        "town": 0.43,
+        "large_town": 0.19,
+        "metro": 0
+      },
+      "educationProfile": {
+        "lower": 0.19,
+        "secondary": 0.63,
+        "tertiary": 0.18
+      },
+      "latentProfileHint": {
+        "culture": 0.06,
+        "globalism": -0.04,
+        "green": 0.02
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: smaller cities and rural South Bohemia."
+    },
+    {
+      "krajId": "CZ032",
+      "krajName": "Plzensky kraj",
+      "nuts2Id": "CZ03",
+      "electorateWeightWithinNuts2": 0.45,
+      "urbanityProfile": {
+        "rural": 0.28,
+        "town": 0.4,
+        "large_town": 0.2,
+        "metro": 0.12
+      },
+      "educationProfile": {
+        "lower": 0.18,
+        "secondary": 0.61,
+        "tertiary": 0.21
+      },
+      "latentProfileHint": {
+        "econ": 0.05,
+        "authority": 0.03,
+        "globalism": 0.02
+      },
+      "metroAreaShares": {
+        "plzen": 0.22,
+        "none": 0.78
+      },
+      "notes": "Synthetic gameplay profile: Plzen metro plus regional towns."
+    },
+    {
+      "krajId": "CZ041",
+      "krajName": "Karlovarsky kraj",
+      "nuts2Id": "CZ04",
+      "electorateWeightWithinNuts2": 0.27,
+      "urbanityProfile": {
+        "rural": 0.25,
+        "town": 0.56,
+        "large_town": 0.19,
+        "metro": 0
+      },
+      "educationProfile": {
+        "lower": 0.24,
+        "secondary": 0.61,
+        "tertiary": 0.15
+      },
+      "latentProfileHint": {
+        "establishment": -0.08,
+        "globalism": -0.07,
+        "green_deal": -0.05
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: peripheral town-heavy region."
+    },
+    {
+      "krajId": "CZ042",
+      "krajName": "Ustecky kraj",
+      "nuts2Id": "CZ04",
+      "electorateWeightWithinNuts2": 0.73,
+      "urbanityProfile": {
+        "rural": 0.2,
+        "town": 0.53,
+        "large_town": 0.27,
+        "metro": 0
+      },
+      "educationProfile": {
+        "lower": 0.25,
+        "secondary": 0.6,
+        "tertiary": 0.15
+      },
+      "latentProfileHint": {
+        "establishment": -0.11,
+        "globalism": -0.08,
+        "green_deal": -0.1,
+        "authority": 0.06
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: industrial/peripheral North Bohemia."
+    },
+    {
+      "krajId": "CZ051",
+      "krajName": "Liberecky kraj",
+      "nuts2Id": "CZ05",
+      "electorateWeightWithinNuts2": 0.29,
+      "urbanityProfile": {
+        "rural": 0.25,
+        "town": 0.42,
+        "large_town": 0.2,
+        "metro": 0.13
+      },
+      "educationProfile": {
+        "lower": 0.18,
+        "secondary": 0.62,
+        "tertiary": 0.2
+      },
+      "latentProfileHint": {
+        "culture": -0.04,
+        "green": 0.06,
+        "globalism": 0.03
+      },
+      "metroAreaShares": {
+        "liberec": 0.24,
+        "none": 0.76
+      },
+      "notes": "Synthetic gameplay profile: Liberec/Jablonec urban belt plus rural areas."
+    },
+    {
+      "krajId": "CZ052",
+      "krajName": "Kralovehradecky kraj",
+      "nuts2Id": "CZ05",
+      "electorateWeightWithinNuts2": 0.36,
+      "urbanityProfile": {
+        "rural": 0.31,
+        "town": 0.43,
+        "large_town": 0.18,
+        "metro": 0.08
+      },
+      "educationProfile": {
+        "lower": 0.17,
+        "secondary": 0.63,
+        "tertiary": 0.2
+      },
+      "latentProfileHint": {
+        "establishment": 0.04,
+        "culture": 0.02
+      },
+      "metroAreaShares": {
+        "hradec_pardubice": 0.16,
+        "none": 0.84
+      },
+      "notes": "Synthetic gameplay profile: Hradec area plus towns/rural."
+    },
+    {
+      "krajId": "CZ053",
+      "krajName": "Pardubicky kraj",
+      "nuts2Id": "CZ05",
+      "electorateWeightWithinNuts2": 0.35,
+      "urbanityProfile": {
+        "rural": 0.34,
+        "town": 0.43,
+        "large_town": 0.17,
+        "metro": 0.06
+      },
+      "educationProfile": {
+        "lower": 0.18,
+        "secondary": 0.64,
+        "tertiary": 0.18
+      },
+      "latentProfileHint": {
+        "econ": 0.02,
+        "culture": 0.04
+      },
+      "metroAreaShares": {
+        "hradec_pardubice": 0.12,
+        "none": 0.88
+      },
+      "notes": "Synthetic gameplay profile: Pardubice area plus smaller towns."
+    },
+    {
+      "krajId": "CZ063",
+      "krajName": "Kraj Vysocina",
+      "nuts2Id": "CZ06",
+      "electorateWeightWithinNuts2": 0.31,
+      "urbanityProfile": {
+        "rural": 0.45,
+        "town": 0.45,
+        "large_town": 0.1,
+        "metro": 0
+      },
+      "educationProfile": {
+        "lower": 0.2,
+        "secondary": 0.65,
+        "tertiary": 0.15
+      },
+      "ageProfile": {
+        "15_24": 0.08,
+        "25_39": 0.2,
+        "40_54": 0.3,
+        "55_plus": 0.42
+      },
+      "latentProfileHint": {
+        "culture": 0.1,
+        "globalism": -0.1,
+        "green_deal": -0.05
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: more rural/town composition, no major metro."
+    },
+    {
+      "krajId": "CZ064",
+      "krajName": "Jihomoravsky kraj",
+      "nuts2Id": "CZ06",
+      "electorateWeightWithinNuts2": 0.69,
+      "urbanityProfile": {
+        "rural": 0.25,
+        "town": 0.3,
+        "large_town": 0.2,
+        "metro": 0.25
+      },
+      "educationProfile": {
+        "lower": 0.15,
+        "secondary": 0.55,
+        "tertiary": 0.3
+      },
+      "ageProfile": {
+        "15_24": 0.1,
+        "25_39": 0.25,
+        "40_54": 0.28,
+        "55_plus": 0.37
+      },
+      "latentProfileHint": {
+        "culture": -0.15,
+        "globalism": 0.15,
+        "establishment": 0.05,
+        "green": 0.05
+      },
+      "metroAreaShares": {
+        "brno": 0.3,
+        "none": 0.7
+      },
+      "notes": "Synthetic gameplay profile: Brno plus non-Brno South Moravian areas."
+    },
+    {
+      "krajId": "CZ071",
+      "krajName": "Olomoucky kraj",
+      "nuts2Id": "CZ07",
+      "electorateWeightWithinNuts2": 0.52,
+      "urbanityProfile": {
+        "rural": 0.32,
+        "town": 0.43,
+        "large_town": 0.16,
+        "metro": 0.09
+      },
+      "educationProfile": {
+        "lower": 0.19,
+        "secondary": 0.62,
+        "tertiary": 0.19
+      },
+      "latentProfileHint": {
+        "establishment": 0.02,
+        "globalism": 0.02
+      },
+      "metroAreaShares": {
+        "olomouc": 0.16,
+        "none": 0.84
+      },
+      "notes": "Synthetic gameplay profile: Olomouc plus Hanak towns/rural."
+    },
+    {
+      "krajId": "CZ072",
+      "krajName": "Zlinsky kraj",
+      "nuts2Id": "CZ07",
+      "electorateWeightWithinNuts2": 0.48,
+      "urbanityProfile": {
+        "rural": 0.36,
+        "town": 0.44,
+        "large_town": 0.2,
+        "metro": 0
+      },
+      "educationProfile": {
+        "lower": 0.18,
+        "secondary": 0.64,
+        "tertiary": 0.18
+      },
+      "latentProfileHint": {
+        "culture": 0.12,
+        "globalism": -0.06,
+        "authority": 0.05
+      },
+      "metroAreaShares": {
+        "none": 1
+      },
+      "notes": "Synthetic gameplay profile: town/rural and more traditional composition."
+    },
+    {
+      "krajId": "CZ080",
+      "krajName": "Moravskoslezsky kraj",
+      "nuts2Id": "CZ08",
+      "electorateWeightWithinNuts2": 1,
+      "urbanityProfile": {
+        "rural": 0.2,
+        "town": 0.35,
+        "large_town": 0.25,
+        "metro": 0.2
+      },
+      "educationProfile": {
+        "lower": 0.2,
+        "secondary": 0.62,
+        "tertiary": 0.18
+      },
+      "latentProfileHint": {
+        "green_deal": -0.15,
+        "green": -0.05,
+        "establishment": -0.05
+      },
+      "metroAreaShares": {
+        "ostrava": 0.3,
+        "none": 0.7
+      },
+      "notes": "Synthetic gameplay profile: Ostrava/industrial region and surrounding areas."
+    }
+  ]
+} as const;
+
+export default krajProfileData;
