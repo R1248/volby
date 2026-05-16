@@ -1,5 +1,5 @@
 import type { RegionId } from '../types/region';
-import type { IssueLayerState } from './issueTypes';
+import type { IssueLayerState, ProgramIssueId } from './issueTypes';
 
 export type Vec3 = {
   authority: number;
@@ -173,16 +173,21 @@ export type CoalitionRelation = {
 };
 
 export type PartyRuntime = {
+  actionCooldowns?: Partial<Record<string, number>>;
   cash: number;
   field: PartyField;
   graySpend: number;
   informationQuality: number;
   leader: LeaderState;
   legalSpend: number;
+  legalExposure?: number;
   marketingAdvisorId: MarketingAdvisorId;
+  mediaVulnerability?: number;
   organization: Partial<Record<RegionId, number>>;
   reputation: ReputationVector;
   scandalRisk: number;
+  staffCap?: number;
+  staffUsed?: number;
   thirdPartySpend: number;
 };
 
@@ -200,10 +205,120 @@ export type ActionType = {
 
 export type PlannedAction = {
   actionId: CampaignActionId;
+  actionV2Id?: string;
   id: string;
   targetIssueId?: IssueId;
+  targetPartyId?: PartyId;
+  targetProgramIssueId?: ProgramIssueId;
   targetRegionId?: RegionId;
   targetSegmentId?: SegmentId;
+};
+
+export type CampaignActionCategory =
+  | 'field'
+  | 'media'
+  | 'digital'
+  | 'program'
+  | 'parliament'
+  | 'analytics'
+  | 'organization'
+  | 'coalition'
+  | 'turnout'
+  | 'crisis'
+  | 'negative'
+  | 'ally'
+  | 'grayZone'
+  | 'blackOps';
+
+export type CampaignActionLegality = 'clean' | 'gray' | 'illegal';
+
+export type CampaignActionTargetScope =
+  | 'national'
+  | 'region'
+  | 'segment'
+  | 'issue'
+  | 'opponent'
+  | 'mediaOutlet'
+  | 'leader';
+
+export type TargetedModifier = {
+  scope: CampaignActionTargetScope;
+  amount: number;
+  segmentIds?: string[];
+  regionIds?: string[];
+  issueIds?: string[];
+  partyIds?: PartyId[];
+};
+
+export type CampaignActionV2 = {
+  id: string;
+  name: string;
+  description: string;
+
+  category: CampaignActionCategory;
+  legality: CampaignActionLegality;
+  ethicalRisk: number;
+
+  cost: number;
+  staffCost: number;
+  leaderTimeCost: number;
+  fatigueCost: number;
+  cooldownWeeks?: number;
+
+  target: {
+    scope: CampaignActionTargetScope;
+    required?: string[];
+    optional?: string[];
+  };
+
+  effects: {
+    fieldAmplitude?: number;
+    latentCenterShift?: Partial<Record<LatentDimension8D, number>>;
+    latentWidthShift?: Partial<Record<LatentDimension8D, number>>;
+
+    issuePositionShift?: Partial<Record<ProgramIssueId, number>>;
+    issueSalienceShift?: Partial<Record<ProgramIssueId, number>>;
+    framingChange?: Partial<Record<ProgramIssueId, string>>;
+
+    turnoutModifier?: TargetedModifier;
+    demobilizationModifier?: TargetedModifier;
+
+    reputationShift?: Partial<ReputationVector>;
+    regionOrganizationShift?: number;
+    informationQualityShift?: number;
+    coalitionRelationShift?: number;
+
+    mediaVulnerabilityShift?: number;
+    scandalRiskShift?: number;
+    legalExposureShift?: number;
+    counterMobilizationRiskShift?: number;
+  };
+
+  risks: {
+    backlash: number;
+    legal: number;
+    media: number;
+    scandal: number;
+    counterMobilization: number;
+    internalFaction: number;
+    coalitionToxicity: number;
+  };
+
+  preview: {
+    visibleToPlayer: boolean;
+    precisionRequired?: 'none' | 'poll' | 'focusGroup' | 'seniorAdvisor';
+    shortEffectLabel?: string;
+    riskLabel?: string;
+  };
+};
+
+export type CampaignTurnoutModifier = {
+  actionId: string;
+  amount: number;
+  expiresWeek: number;
+  kind: 'turnout' | 'demobilization' | 'counterMobilization';
+  target: TargetedModifier;
+  weekApplied: number;
 };
 
 export type MediaOutlet = {
@@ -378,6 +493,7 @@ export type TurnBriefing = {
 
 export type GameState = {
   actions: ActionType[];
+  campaignActionsV2: CampaignActionV2[];
   coalitionRelations: CoalitionRelation[];
   events: EventCard[];
   grid: RegionSegmentState[];
@@ -403,6 +519,7 @@ export type GameState = {
   scandals: ScandalState[];
   segments: VoterSegment[];
   sponsors: SponsorOffer[];
+  turnoutModifiers?: CampaignTurnoutModifier[];
   version: string;
   week: number;
 };

@@ -48,3 +48,16 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+# Campaign Actions v2
+
+`src/game/campaignActionsV2.ts` defines the first structured action catalog for the Volby strategy simulation. Each `CampaignActionV2` has a category, legality band, costs, target scope, subsystem effects, risk vector, and player-facing preview metadata.
+
+Actions are intentionally not direct popularity buttons. The central helper in `src/game/actionEngine.ts` applies budget, staff, leader time, fatigue, field position, issue-layer changes, reputation, organization, information quality, coalition relations, scandal risk, media vulnerability, legal exposure, and prepared turnout modifiers. The weekly resolver now tries this helper first and falls back to legacy actions only when no v2 mapping exists.
+
+Legality bands:
+
+- `clean`: ordinary campaign mechanics with low legal exposure.
+- `gray`: abstract high-risk mechanics with backlash, legal/media exposure, coalition toxicity, and counter-mobilization risk.
+- `illegal`: black-ops abstractions only. They are deliberately non-operational and are modeled through detection, scandal, legal exposure, integrity loss, and coalition damage.
+
+Turnout is prepared but not fully migrated. `CampaignActionV2` stores turnout and demobilization modifiers separately, and `preparedTurnoutProbability` documents the target formula. The current election engine still keeps the legacy abstention denominator for compatibility until the turnout/choice split is tested end to end.

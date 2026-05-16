@@ -1,75 +1,84 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
-import {
-  Animated,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-  type DimensionValue,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type DimensionValue } from 'react-native';
 
 import { Sidebar } from '@/src/components/dashboard/Sidebar';
 import { StatusStrip } from '@/src/components/dashboard/StatusStrip';
 import { regions as displayRegions } from '@/src/data/regions';
+import { legacyCampaignActionV2ById } from '@/src/game/campaignActionsV2';
 import { previewActionImpact } from '@/src/game/engine';
-import type { ActionType, CampaignActionId, PlannedAction } from '@/src/game/types';
+import type { CampaignActionCategory, CampaignActionV2, CampaignActionId, PlannedAction } from '@/src/game/types';
 import { regionalCampaignEvents } from '@/src/simulation/data/regionalCampaignEvents';
 import { krajIdByRegionId, krajeById } from '@/src/simulation/model/regionalEnrichment';
 import { useGameStore } from '@/src/store/useGameStore';
 import { colors } from '@/src/theme/colors';
 import type { RegionId } from '@/src/types/region';
 
-type CampaignCategory = Exclude<ActionType['category'], 'Analytika' | 'Finance'>;
-type CategoryFilter = CampaignCategory | 'Vše';
+type CategoryFilter = CampaignActionCategory | 'all';
 
-const DRAWER_WIDTH = 340;
-const categories: CategoryFilter[] = ['Vše', 'Terén', 'Online', 'Média', 'Program'];
+const categories: CategoryFilter[] = [
+  'all',
+  'field',
+  'media',
+  'digital',
+  'program',
+  'parliament',
+  'analytics',
+  'organization',
+  'coalition',
+  'turnout',
+  'crisis',
+  'negative',
+  'ally',
+  'grayZone',
+  'blackOps',
+];
 
-const actionIcons: Record<CampaignActionId, string> = {
-  debate: 'TV',
-  financeTransparency: 'CZ',
-  focusGroup: 'FG',
-  internalPoll: 'PR',
-  leaderVisit: 'LD',
-  negativeCampaign: '!',
-  onlineCampaign: 'ON',
-  opaqueSupport: '!!',
-  parliamentSpeech: 'SN',
-  policyPackage: 'PG',
-  messageTest: 'MT',
-  regionalRally: 'TR',
-  schoolVisit: 'SK',
-  thirdPartySupport: '3O',
-  tvInterview: 'TV',
+const categoryIcons: Record<CampaignActionCategory, string> = {
+  ally: 'AL',
+  analytics: 'AN',
+  blackOps: '!!',
+  coalition: 'KO',
+  crisis: 'KR',
+  digital: 'DG',
+  field: 'TR',
+  grayZone: 'GZ',
+  media: 'TV',
+  negative: '!',
+  organization: 'OR',
+  parliament: 'SN',
+  program: 'PG',
+  turnout: 'GO',
 };
 
-const actionImpactTags: Record<CampaignActionId, string[]> = {
-  debate: ['Média', 'Dosah', 'Únava'],
-  financeTransparency: ['Reputace', 'Riziko kauzy'],
-  focusGroup: ['Program', 'Odhady'],
-  internalPoll: ['Odhady', 'Region'],
-  leaderVisit: ['Terén', 'Reputace', 'Únava'],
-  messageTest: ['Program', 'Odhady'],
-  negativeCampaign: ['Média', 'Riziko kauzy'],
-  onlineCampaign: ['Dosah', 'Region'],
-  opaqueSupport: ['Dosah', 'Riziko kauzy'],
-  parliamentSpeech: ['Reputace', 'Program'],
-  policyPackage: ['Program', 'Reputace'],
-  regionalRally: ['Terén', 'Region'],
-  schoolVisit: ['Média', 'Program', 'Region'],
-  thirdPartySupport: ['Dosah', 'Riziko kauzy'],
-  tvInterview: ['Média', 'Dosah', 'Únava'],
+const categoryLabels: Record<CategoryFilter, string> = {
+  all: 'Vse',
+  ally: 'Spojenci',
+  analytics: 'Analyza',
+  blackOps: 'Black ops',
+  coalition: 'Koalice',
+  crisis: 'Krize',
+  digital: 'Digital',
+  field: 'Teren',
+  grayZone: 'Seda zona',
+  media: 'Media',
+  negative: 'Negativni',
+  organization: 'Organizace',
+  parliament: 'Snemovna',
+  program: 'Program',
+  turnout: 'Turnout',
 };
 
-const recommendedTargets: Partial<Record<CampaignActionId, RegionId[]>> = {
-  internalPoll: ['ustecky', 'stredocesky', 'praha'],
-  leaderVisit: ['stredocesky', 'ustecky', 'jihomoravsky'],
-  onlineCampaign: ['praha', 'jihomoravsky', 'stredocesky'],
-  regionalRally: ['ustecky', 'stredocesky', 'jihomoravsky'],
+const recommendedTargets: Partial<Record<string, RegionId[]>> = {
+  doorToDoor: ['ustecky', 'stredocesky', 'praha'],
+  factoryVisit: ['moravskoslezsky', 'ustecky', 'zlinsky'],
+  internalTrackingPoll: ['ustecky', 'stredocesky', 'praha'],
+  regionalAnalysis: ['ustecky', 'stredocesky', 'praha'],
+  regionalMeeting: ['ustecky', 'stredocesky', 'jihomoravsky'],
+  regionalMediaAppearance: ['moravskoslezsky', 'stredocesky', 'jihomoravsky'],
   schoolVisit: ['praha', 'jihomoravsky', 'stredocesky'],
+  townHall: ['stredocesky', 'ustecky', 'jihomoravsky'],
+  volunteerRecruitment: ['ustecky', 'moravskoslezsky', 'stredocesky'],
 };
 
 export default function CampaignScreen() {
@@ -77,40 +86,36 @@ export default function CampaignScreen() {
   const selectedRegionId = useGameStore((state) => state.selectedRegionId);
   const gameState = useGameStore((state) => state.gameState);
   const plannedActions = useGameStore((state) => state.plannedActions);
-  const planAction = useGameStore((state) => state.planAction);
+  const planCampaignActionV2 = useGameStore((state) => state.planCampaignActionV2);
   const removePlannedAction = useGameStore((state) => state.removePlannedAction);
   const resolvePlannedWeek = useGameStore((state) => state.resolvePlannedWeek);
-  const [selectedActionId, setSelectedActionId] = useState<CampaignActionId>();
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Vše');
+  const [selectedActionId, setSelectedActionId] = useState<string>();
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
   const [targetRegionId, setTargetRegionId] = useState<RegionId | undefined>(selectedRegionId);
   const { width } = useWindowDimensions();
-  const tileWidth: DimensionValue = width >= 1050 ? '31.8%' : '48.7%';
-  const selectedAction = gameState.actions.find((action) => action.id === selectedActionId);
+  const tileWidth: DimensionValue = width >= 1150 ? '31.8%' : width >= 820 ? '48.6%' : '100%';
+  const selectedAction = gameState.campaignActionsV2.find((action) => action.id === selectedActionId);
   const plannedCost = plannedActions.reduce((sum, item) => {
-    const action = gameState.actions.find((candidate) => candidate.id === item.actionId);
+    const action = gameState.campaignActionsV2.find((candidate) => candidate.id === item.actionV2Id);
     return sum + (action?.cost ?? 0);
   }, 0);
   const remainingCapacity = gameState.rules.maxActionsPerWeek - plannedActions.length;
   const remainingBudget = gameState.partyRuntime.player.cash - plannedCost;
-  const filteredActions = gameState.actions.filter(
-    (action) =>
-      action.category !== 'Analytika' &&
-      action.category !== 'Finance' &&
-      (selectedCategory === 'Vše' || action.category === selectedCategory),
-  );
+  const filteredActions = gameState.campaignActionsV2.filter((action) => selectedCategory === 'all' || action.category === selectedCategory);
   const preview =
-    selectedAction && (selectedAction.target === 'national' || targetRegionId)
+    selectedAction && (selectedAction.target.scope !== 'region' || targetRegionId)
       ? previewActionImpact(gameState, {
-          actionId: selectedAction.id,
+          actionId: legacyActionIdForActionV2(selectedAction.id),
+          actionV2Id: selectedAction.id,
           id: 'preview',
-          targetRegionId: selectedAction.target === 'region' ? targetRegionId : undefined,
+          targetRegionId: selectedAction.target.scope === 'region' ? targetRegionId : undefined,
         })
       : undefined;
   const canAddAction = Boolean(
     selectedAction &&
-      remainingCapacity >= selectedAction.capacityCost &&
+      remainingCapacity > 0 &&
       remainingBudget >= selectedAction.cost &&
-      (selectedAction.target === 'national' || targetRegionId),
+      (selectedAction.target.scope !== 'region' || targetRegionId),
   );
   const drawerRegions = useMemo(() => {
     const ids = selectedAction ? recommendedTargets[selectedAction.id] ?? ['praha', 'stredocesky', 'ustecky'] : [];
@@ -120,17 +125,18 @@ export default function CampaignScreen() {
   }, [selectedAction]);
   const regionalTargetSummary = selectedAction ? getRegionalTargetSummary(selectedAction.id, targetRegionId) : undefined;
 
-  const selectAction = (action: ActionType) => {
+  const selectAction = (action: CampaignActionV2) => {
     setSelectedActionId(action.id);
     setTargetRegionId((recommendedTargets[action.id]?.[0] ?? selectedRegionId) as RegionId);
   };
+
   const addToPlan = () => {
     if (!selectedAction || !canAddAction) {
       return;
     }
-
-    planAction(selectedAction.id, selectedAction.target === 'region' ? targetRegionId : undefined);
+    planCampaignActionV2(selectedAction.id, selectedAction.target.scope === 'region' ? targetRegionId : undefined);
   };
+
   const playPlannedWeek = () => {
     resolvePlannedWeek();
     router.replace('/briefing');
@@ -143,43 +149,43 @@ export default function CampaignScreen() {
       <View style={styles.workspace}>
         <StatusStrip />
 
-        <View style={styles.hqSurface}>
-          <CategoryFilterBar selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
-          <ScrollView contentContainerStyle={styles.tileGrid} showsVerticalScrollIndicator>
-            {filteredActions.map((action) => (
-              <CampaignActionTile
-                action={action}
-                isDisabled={remainingBudget < action.cost || remainingCapacity < action.capacityCost}
-                isSelected={action.id === selectedActionId}
-                key={action.id}
-                onPress={() => selectAction(action)}
-                tileWidth={tileWidth}
-              />
-            ))}
-          </ScrollView>
+        <View style={styles.mainGrid}>
+          <View style={styles.actionSurface}>
+            <CategoryFilterBar selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
+            <ScrollView contentContainerStyle={styles.tileGrid} showsVerticalScrollIndicator>
+              {filteredActions.map((action) => (
+                <CampaignActionTile
+                  action={action}
+                  isDisabled={remainingBudget < action.cost || remainingCapacity <= 0}
+                  isSelected={action.id === selectedActionId}
+                  key={action.id}
+                  onPress={() => selectAction(action)}
+                  tileWidth={tileWidth}
+                />
+              ))}
+            </ScrollView>
 
-          <WeeklyPlan
-            actions={gameState.actions}
-            onPlay={playPlannedWeek}
-            onRemove={removePlannedAction}
-            plan={plannedActions}
-            plannedCost={plannedCost}
-            remainingCapacity={remainingCapacity}
+            <WeeklyPlan
+              actions={gameState.campaignActionsV2}
+              onPlay={playPlannedWeek}
+              onRemove={removePlannedAction}
+              plan={plannedActions}
+              plannedCost={plannedCost}
+              remainingCapacity={remainingCapacity}
+            />
+          </View>
+
+          <ActionDetailPanel
+            action={selectedAction}
+            canAddAction={canAddAction}
+            onAddToPlan={addToPlan}
+            onSelectTarget={setTargetRegionId}
+            previewLabel={preview?.label}
+            regionalTargetSummary={regionalTargetSummary}
+            recommendedRegions={drawerRegions}
+            selectedRegionId={targetRegionId}
           />
         </View>
-
-        <ActionDetailDrawer
-          action={selectedAction}
-          canAddAction={canAddAction}
-          isOpen={Boolean(selectedAction)}
-          onAddToPlan={addToPlan}
-          onClose={() => setSelectedActionId(undefined)}
-          onSelectTarget={setTargetRegionId}
-          previewLabel={preview?.label}
-          regionalTargetSummary={regionalTargetSummary}
-          recommendedRegions={drawerRegions}
-          selectedRegionId={targetRegionId}
-        />
       </View>
     </View>
   );
@@ -196,14 +202,13 @@ function CategoryFilterBar({
     <View style={styles.categoryBar}>
       {categories.map((category) => {
         const isSelected = category === selectedCategory;
-
         return (
           <Pressable
             key={category}
             onPress={() => onSelect(category)}
             style={[styles.categoryButton, isSelected && styles.categoryButtonActive]}
           >
-            <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{category}</Text>
+            <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{categoryLabels[category]}</Text>
           </Pressable>
         );
       })}
@@ -218,7 +223,7 @@ function CampaignActionTile({
   onPress,
   tileWidth,
 }: {
-  action: ActionType;
+  action: CampaignActionV2;
   isDisabled: boolean;
   isSelected: boolean;
   onPress: () => void;
@@ -228,20 +233,15 @@ function CampaignActionTile({
     <Pressable
       disabled={isDisabled}
       onPress={onPress}
-      style={[
-        styles.actionTile,
-        { width: tileWidth },
-        isSelected && styles.actionTileSelected,
-        isDisabled && styles.actionTileDisabled,
-      ]}
+      style={[styles.actionTile, { width: tileWidth }, isSelected && styles.actionTileSelected, isDisabled && styles.actionTileDisabled]}
     >
       <View style={styles.tileTop}>
-        <View style={[styles.tileIcon, isSelected && styles.tileIconSelected]}>
-          <Text style={[styles.tileIconText, isSelected && styles.tileIconTextSelected]}>{actionIcons[action.id]}</Text>
+        <View style={[styles.tileIcon, action.legality === 'illegal' && styles.tileIconDanger, isSelected && styles.tileIconSelected]}>
+          <Text style={[styles.tileIconText, isSelected && styles.tileIconTextSelected]}>{categoryIcons[action.category]}</Text>
         </View>
         <View style={styles.tileTitleWrap}>
           <Text style={[styles.tileCategory, isSelected && styles.tileCategorySelected]} numberOfLines={1}>
-            {action.category.toUpperCase()}
+            {categoryLabels[action.category].toUpperCase()} / {action.legality.toUpperCase()}
           </Text>
           <Text style={[styles.tileTitle, isSelected && styles.tileTitleSelected]} numberOfLines={2}>
             {action.name}
@@ -251,127 +251,86 @@ function CampaignActionTile({
 
       <View style={styles.tileStats}>
         <TileBadge label="Cena" value={`${action.cost.toFixed(1)}M`} selected={isSelected} />
-        <TileBadge label="Riziko" value={action.risk} selected={isSelected} tone={action.risk === 'vyšší' ? 'danger' : undefined} />
-        {actionImpactTags[action.id].slice(0, 3).map((tag) => (
-          <ImpactTag key={tag} label={tag} selected={isSelected} />
-        ))}
+        <TileBadge label="Stab" value={String(action.staffCost)} selected={isSelected} />
+        <TileBadge label="Lidr" value={action.leaderTimeCost.toFixed(2)} selected={isSelected} />
+        <TileBadge label="Cil" value={action.target.scope} selected={isSelected} />
+        <ImpactTag label={action.preview.riskLabel ?? riskLabel(action)} selected={isSelected} tone={action.legality === 'illegal' ? 'danger' : undefined} />
       </View>
     </Pressable>
   );
 }
 
-function ImpactTag({ label, selected }: { label: string; selected: boolean }) {
-  return (
-    <View style={[styles.impactTag, selected && styles.impactTagSelected]}>
-      <Text style={[styles.impactTagText, selected && styles.impactTagTextSelected]} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function TileBadge({
-  label,
-  selected,
-  tone,
-  value,
-}: {
-  label: string;
-  selected: boolean;
-  tone?: 'danger';
-  value: string;
-}) {
-  return (
-    <View style={[styles.tileBadge, selected && styles.tileBadgeSelected]}>
-      <Text style={[styles.tileBadgeLabel, selected && styles.tileBadgeLabelSelected]}>{label}</Text>
-      <Text
-        style={[
-          styles.tileBadgeValue,
-          selected && styles.tileBadgeValueSelected,
-          tone === 'danger' && styles.tileBadgeDanger,
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function ActionDetailDrawer({
+function ActionDetailPanel({
   action,
   canAddAction,
-  isOpen,
   onAddToPlan,
-  onClose,
   onSelectTarget,
   previewLabel,
   regionalTargetSummary,
   recommendedRegions,
   selectedRegionId,
 }: {
-  action?: ActionType;
+  action?: CampaignActionV2;
   canAddAction: boolean;
-  isOpen: boolean;
   onAddToPlan: () => void;
-  onClose: () => void;
   onSelectTarget: (regionId: RegionId) => void;
   previewLabel?: string;
   regionalTargetSummary?: string;
   recommendedRegions: typeof displayRegions;
   selectedRegionId?: RegionId;
 }) {
-  const translateX = useRef(new Animated.Value(DRAWER_WIDTH + 20)).current;
-
-  useEffect(() => {
-    Animated.timing(translateX, {
-      duration: 220,
-      toValue: isOpen ? 0 : DRAWER_WIDTH + 20,
-      useNativeDriver: true,
-    }).start();
-  }, [isOpen, translateX]);
-
   if (!action) {
-    return null;
+    return (
+      <View style={styles.detailPanel}>
+        <Text style={styles.emptyDetailTitle}>Campaign Actions v2</Text>
+        <Text style={styles.previewMuted}>Vyberte akci z katalogu. Kazda akce meni vice subsystemu nez jen podporu.</Text>
+      </View>
+    );
   }
 
   return (
-    <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
-      <ScrollView contentContainerStyle={styles.drawerContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.drawerHeader}>
-          <View style={styles.drawerHeaderText}>
-            <Text style={styles.drawerKicker}>Taktický panel</Text>
-            <Text style={styles.drawerCategory}>{action.category.toUpperCase()}</Text>
-            <Text style={styles.drawerTitle} numberOfLines={2}>
-              {action.name}
+    <View style={styles.detailPanel}>
+      <ScrollView contentContainerStyle={styles.detailContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.drawerKicker}>Takticky panel v2</Text>
+        <Text style={styles.drawerCategory}>
+          {categoryLabels[action.category].toUpperCase()} / {action.legality.toUpperCase()}
+        </Text>
+        <Text style={styles.drawerTitle} numberOfLines={3}>
+          {action.name}
+        </Text>
+
+        <Text style={styles.drawerDescription}>{safeDescription(action)}</Text>
+
+        {action.legality === 'illegal' ? (
+          <View style={styles.illegalWarning}>
+            <Text style={styles.illegalTitle}>Vysokorizikova abstraktni simulace</Text>
+            <Text style={styles.illegalText}>
+              Tato volba je herni model pravni expozice, odhaleni, backlash a reputacni ztraty. Neobsahuje prakticke postupy.
             </Text>
           </View>
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeText}>X</Text>
-          </Pressable>
-        </View>
-
-        <Text style={styles.drawerDescription}>{action.description}</Text>
+        ) : null}
 
         <View style={styles.panelStats}>
-          <PanelStat label="Rozpočet" value={`${action.cost.toFixed(1)}M Kč`} />
-          <PanelStat label="Sloty v týdnu" value={String(action.capacityCost)} />
-          <PanelStat label="Čas lídra" value={`${action.leaderTimeCost.toFixed(2)} týdne`} />
-          <PanelStat label="Riziko" value={action.risk} />
+          <PanelStat label="Rozpocet" value={`${action.cost.toFixed(1)}M Kc`} />
+          <PanelStat label="Stab" value={String(action.staffCost)} />
+          <PanelStat label="Cas lidra" value={`${action.leaderTimeCost.toFixed(2)} tydne`} />
+          <PanelStat label="Cil" value={action.target.scope} />
+          <PanelStat label="Eticke riziko" value={`${Math.round(action.ethicalRisk * 100)}%`} />
+          <PanelStat label="Legalita" value={action.legality} />
         </View>
 
         <View style={styles.impactPanel}>
-          <Text style={styles.blockTitle}>Co akce skutečně mění</Text>
+          <Text style={styles.blockTitle}>Strukturovane dopady</Text>
           <View style={styles.impactList}>
-            {actionImpactTags[action.id].map((tag) => (
+            {effectTags(action).map((tag) => (
               <ImpactTag key={tag} label={tag} selected={false} />
             ))}
           </View>
         </View>
 
-        {action.target === 'region' ? (
+        {action.target.scope === 'region' ? (
           <View style={styles.targetSection}>
-            <Text style={styles.blockTitle}>Doporučené cíle</Text>
+            <Text style={styles.blockTitle}>Doporucene cile</Text>
             <View style={styles.recommendedList}>
               {recommendedRegions.map((region) => {
                 const isSelected = region.id === selectedRegionId;
@@ -385,79 +344,32 @@ function ActionDetailDrawer({
                       {region.name}
                     </Text>
                     <Text style={[styles.targetNote, isSelected && styles.targetNoteSelected]}>
-                      {isSelected ? 'vybraný cíl' : 'vhodný segmentový překryv'}
+                      {isSelected ? 'vybrany cil' : 'vhodny segmentovy prekryv'}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
           </View>
-        ) : (
-          <View style={styles.previewBox}>
-            <Text style={styles.previewTitle}>Celostátní akce</Text>
-            <Text style={styles.previewMuted}>Akce se aplikuje na reputaci, pole, tematickou pozici nebo mediální dosah bez výběru kraje.</Text>
-          </View>
-        )}
+        ) : null}
 
         {regionalTargetSummary ? (
           <View style={styles.previewBox}>
-            <Text style={styles.previewTitle}>Regionální profil zásahu</Text>
+            <Text style={styles.previewTitle}>Regionalni profil</Text>
             <Text style={styles.previewMuted}>{regionalTargetSummary}</Text>
           </View>
         ) : null}
 
         <View style={styles.previewBox}>
-          <Text style={styles.previewTitle}>Rychlý náhled</Text>
-          <Text style={styles.previewMuted}>{previewLabel ?? 'Vyberte cíl pro náhled dopadu.'}</Text>
+          <Text style={styles.previewTitle}>Nahled poradce</Text>
+          <Text style={styles.previewMuted}>{previewLabel ?? action.preview.shortEffectLabel ?? 'Dopad je nejisty bez dalsich dat.'}</Text>
+          <Text style={styles.previewMuted}>{action.preview.riskLabel ?? riskLabel(action)}</Text>
         </View>
 
-        <View style={styles.advisorNote}>
-          <Text style={styles.advisorText}>
-            Poradce kampaně: Akce nemění procenta přímo. Mění latentní parametry strany a výsledek vysvětlí briefing týdne.
-          </Text>
-        </View>
-
-        <Pressable
-          disabled={!canAddAction}
-          onPress={onAddToPlan}
-          style={[styles.addOrderButton, !canAddAction && styles.addOrderButtonDisabled]}
-        >
-          <Text style={styles.addOrderText}>Přidat do plánu</Text>
+        <Pressable disabled={!canAddAction} onPress={onAddToPlan} style={[styles.addOrderButton, !canAddAction && styles.addOrderButtonDisabled]}>
+          <Text style={styles.addOrderText}>Pridat do planu</Text>
         </Pressable>
       </ScrollView>
-    </Animated.View>
-  );
-}
-
-function getRegionalTargetSummary(actionId: CampaignActionId, regionId?: RegionId) {
-  if (!regionId) {
-    return undefined;
-  }
-
-  const krajId = krajIdByRegionId[regionId];
-  const krajName = krajId ? krajeById[krajId]?.name : undefined;
-  const event =
-    regionalCampaignEvents.find((candidate) => candidate.target.krajIds?.includes(krajId)) ??
-    (actionId === 'schoolVisit' ? regionalCampaignEvents.find((candidate) => candidate.id === 'praha-liberal-urban') : undefined);
-
-  if (!event) {
-    return `${krajName ?? regionId}: zásah se vyhodnotí podle krajských částic, urbanity, vzdělání a socioekonomického proxy.`;
-  }
-
-  const metro = event.target.metroAreas?.join(', ') ?? 'bez metra';
-  const urbanity = event.target.urbanity?.join(', ') ?? 'všechny sídelní typy';
-  const education = event.target.educationGroups?.join(', ') ?? 'všechna vzdělání';
-
-  return `${event.name}: ${krajName ?? regionId}, metro ${metro}, urbanita ${urbanity}, vzdělání ${education}.`;
-}
-
-function PanelStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.panelStat}>
-      <Text style={styles.panelStatLabel}>{label}</Text>
-      <Text style={styles.panelStatValue} numberOfLines={1}>
-        {value}
-      </Text>
     </View>
   );
 }
@@ -470,7 +382,7 @@ function WeeklyPlan({
   plannedCost,
   remainingCapacity,
 }: {
-  actions: ActionType[];
+  actions: CampaignActionV2[];
   onPlay: () => void;
   onRemove: (plannedActionId: string) => void;
   plan: PlannedAction[];
@@ -481,20 +393,20 @@ function WeeklyPlan({
     <View style={styles.weeklyPlan}>
       <View style={styles.weekHeader}>
         <View>
-          <Text style={styles.weekTitle}>Plán týdne</Text>
+          <Text style={styles.weekTitle}>Plan tydne</Text>
           <Text style={styles.planMeta}>
-            Zbývá {remainingCapacity} rozkazů · náklady {plannedCost.toFixed(1)}M Kč
+            Zbyva {remainingCapacity} rozkazu / naklady {plannedCost.toFixed(1)}M Kc
           </Text>
         </View>
         <Pressable disabled={plan.length === 0} onPress={onPlay} style={[styles.playButton, plan.length === 0 && styles.playButtonDisabled]}>
-          <Text style={styles.playButtonText}>Odehrát týden</Text>
+          <Text style={styles.playButtonText}>Odehrat tyden</Text>
         </Pressable>
       </View>
 
       <View style={styles.slots}>
         {[0, 1, 2].map((slotIndex) => {
           const plannedAction = plan[slotIndex];
-          const action = plannedAction ? actions.find((candidate) => candidate.id === plannedAction.actionId) : undefined;
+          const action = plannedAction ? actions.find((candidate) => candidate.id === plannedAction.actionV2Id) : undefined;
           const region = plannedAction?.targetRegionId
             ? displayRegions.find((candidate) => candidate.id === plannedAction.targetRegionId)
             : undefined;
@@ -509,18 +421,18 @@ function WeeklyPlan({
                       {action.name}
                     </Text>
                     <Text style={styles.orderSubtitle} numberOfLines={1}>
-                      {region?.name ?? 'Celostátně'}
+                      {region?.name ?? 'Celostatne'}
                     </Text>
                     <Text style={styles.orderMeta} numberOfLines={1}>
-                      {action.cost.toFixed(1)}M Kč · {actionImpactTags[action.id].slice(0, 2).join(', ')}
+                      {action.cost.toFixed(1)}M Kc / {categoryLabels[action.category]} / {action.legality}
                     </Text>
                   </View>
                   <Pressable onPress={() => onRemove(plannedAction.id)} style={styles.removeButton}>
-                    <Text style={styles.removeButtonText}>Zrušit</Text>
+                    <Text style={styles.removeButtonText}>Zrusit</Text>
                   </Pressable>
                 </View>
               ) : (
-                <Text style={styles.emptyOrder}>Čeká na rozkaz</Text>
+                <Text style={styles.emptyOrder}>Ceka na rozkaz</Text>
               )}
             </View>
           );
@@ -530,13 +442,118 @@ function WeeklyPlan({
   );
 }
 
+function PanelStat({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.panelStat}>
+      <Text style={styles.panelStatLabel}>{label}</Text>
+      <Text style={styles.panelStatValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ImpactTag({ label, selected, tone }: { label: string; selected: boolean; tone?: 'danger' }) {
+  return (
+    <View style={[styles.impactTag, selected && styles.impactTagSelected, tone === 'danger' && styles.impactTagDanger]}>
+      <Text style={[styles.impactTagText, selected && styles.impactTagTextSelected, tone === 'danger' && styles.impactTagTextDanger]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function TileBadge({ label, selected, value }: { label: string; selected: boolean; value: string }) {
+  return (
+    <View style={[styles.tileBadge, selected && styles.tileBadgeSelected]}>
+      <Text style={[styles.tileBadgeLabel, selected && styles.tileBadgeLabelSelected]}>{label}</Text>
+      <Text style={[styles.tileBadgeValue, selected && styles.tileBadgeValueSelected]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function legacyActionIdForActionV2(actionV2Id: string): CampaignActionId {
+  const legacyEntry = Object.entries(legacyCampaignActionV2ById).find(([, mappedId]) => mappedId === actionV2Id);
+  return (legacyEntry?.[0] as CampaignActionId | undefined) ?? 'regionalRally';
+}
+
+function effectTags(action: CampaignActionV2) {
+  const effects = action.effects;
+  return [
+    effects.fieldAmplitude || effects.latentCenterShift || effects.latentWidthShift ? 'pole strany' : undefined,
+    effects.issuePositionShift || effects.issueSalienceShift || effects.framingChange ? 'issue vrstva' : undefined,
+    effects.turnoutModifier || effects.demobilizationModifier ? 'turnout priprava' : undefined,
+    effects.reputationShift ? 'reputace' : undefined,
+    effects.regionOrganizationShift ? 'organizace' : undefined,
+    effects.informationQualityShift ? 'informacni kvalita' : undefined,
+    effects.coalitionRelationShift ? 'koalice' : undefined,
+    effects.mediaVulnerabilityShift ? 'media risk' : undefined,
+    effects.scandalRiskShift || effects.legalExposureShift ? 'expozice' : undefined,
+    effects.counterMobilizationRiskShift ? 'protimobilizace' : undefined,
+  ].filter((tag): tag is string => Boolean(tag));
+}
+
+function riskLabel(action: CampaignActionV2) {
+  const maxRisk = Math.max(...Object.values(action.risks));
+  if (action.legality === 'illegal' || maxRisk >= 0.7) {
+    return 'extremni riziko';
+  }
+  if (action.legality === 'gray' || maxRisk >= 0.3) {
+    return 'vysoke riziko';
+  }
+  if (maxRisk >= 0.12) {
+    return 'stredni riziko';
+  }
+  return 'nizke riziko';
+}
+
+function safeDescription(action: CampaignActionV2) {
+  if (action.legality === 'illegal') {
+    return 'Abstraktni vysoko rizikova herni mechanika. Dopad se modeluje pres odhaleni, pravni expozici, backlash, reputaci, koalicni toxicitu a protimobilizaci.';
+  }
+
+  return action.description;
+}
+
+function getRegionalTargetSummary(actionId: string, regionId?: RegionId) {
+  if (!regionId) {
+    return undefined;
+  }
+
+  const krajId = krajIdByRegionId[regionId];
+  const krajName = krajId ? krajeById[krajId]?.name : undefined;
+  const event =
+    regionalCampaignEvents.find((candidate) => candidate.target.krajIds?.includes(krajId)) ??
+    (actionId === 'schoolVisit' ? regionalCampaignEvents.find((candidate) => candidate.id === 'praha-liberal-urban') : undefined);
+
+  if (!event) {
+    return `${krajName ?? regionId}: zasah se vyhodnoti podle krajskych castic, urbanity, vzdelani a socioekonomickeho proxy.`;
+  }
+
+  const metro = event.target.metroAreas?.join(', ') ?? 'bez metra';
+  const urbanity = event.target.urbanity?.join(', ') ?? 'vsechny sidelni typy';
+  const education = event.target.educationGroups?.join(', ') ?? 'vsechna vzdelani';
+
+  return `${event.name}: ${krajName ?? regionId}, metro ${metro}, urbanita ${urbanity}, vzdelani ${education}.`;
+}
+
 const styles = StyleSheet.create({
+  actionSurface: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    padding: 12,
+  },
   actionTile: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    minHeight: 112,
+    minHeight: 126,
     padding: 9,
   },
   actionTileDisabled: {
@@ -561,20 +578,6 @@ const styles = StyleSheet.create({
     color: colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '900',
-  },
-  advisorNote: {
-    backgroundColor: '#FFF7D6',
-    borderColor: colors.selected,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-    padding: 10,
-  },
-  advisorText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 17,
   },
   blockTitle: {
     color: colors.text,
@@ -607,31 +610,15 @@ const styles = StyleSheet.create({
   categoryTextActive: {
     color: colors.textOnPrimary,
   },
-  closeButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 8,
-    height: 30,
-    justifyContent: 'center',
-    width: 30,
+  detailContent: {
+    padding: 13,
   },
-  closeText: {
-    color: colors.primaryDark,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  drawer: {
+  detailPanel: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    bottom: 10,
-    elevation: 10,
-    position: 'absolute',
-    right: 10,
-    top: 10,
-    width: DRAWER_WIDTH,
-    zIndex: 10,
+    width: 360,
   },
   drawerCategory: {
     color: colors.textMuted,
@@ -639,24 +626,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 7,
   },
-  drawerContent: {
-    padding: 13,
-  },
   drawerDescription: {
     color: colors.textMuted,
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
     marginTop: 9,
-  },
-  drawerHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  drawerHeaderText: {
-    flex: 1,
   },
   drawerKicker: {
     color: colors.accent,
@@ -670,19 +645,37 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 2,
   },
+  emptyDetailTitle: {
+    color: colors.primaryDark,
+    fontSize: 20,
+    fontWeight: '900',
+    padding: 13,
+  },
   emptyOrder: {
     color: '#DCEAF7',
     fontSize: 12,
     fontWeight: '800',
     marginTop: 11,
   },
-  hqSurface: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+  illegalText: {
+    color: colors.danger,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  illegalTitle: {
+    color: colors.danger,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  illegalWarning: {
+    backgroundColor: '#FFF0F0',
+    borderColor: colors.danger,
     borderRadius: 8,
     borderWidth: 1,
-    flex: 1,
-    padding: 12,
+    marginTop: 12,
+    padding: 10,
   },
   impactList: {
     flexDirection: 'row',
@@ -701,6 +694,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+  impactTagDanger: {
+    backgroundColor: '#FFF0F0',
+    borderColor: colors.danger,
+  },
   impactTagSelected: {
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderColor: 'rgba(255,255,255,0.2)',
@@ -710,8 +707,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  impactTagTextDanger: {
+    color: colors.danger,
+  },
   impactTagTextSelected: {
     color: colors.textOnPrimary,
+  },
+  mainGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
   },
   orderContent: {
     alignItems: 'center',
@@ -812,6 +817,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
     fontWeight: '700',
+    lineHeight: 17,
     marginTop: 4,
   },
   previewTitle: {
@@ -878,12 +884,9 @@ const styles = StyleSheet.create({
   tileBadge: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: 7,
-    minWidth: 54,
+    minWidth: 48,
     paddingHorizontal: 6,
     paddingVertical: 4,
-  },
-  tileBadgeDanger: {
-    color: colors.danger,
   },
   tileBadgeLabel: {
     color: colors.textMuted,
@@ -934,6 +937,10 @@ const styles = StyleSheet.create({
     height: 38,
     justifyContent: 'center',
     width: 38,
+  },
+  tileIconDanger: {
+    backgroundColor: '#FFF0F0',
+    borderColor: colors.danger,
   },
   tileIconSelected: {
     backgroundColor: colors.selected,
@@ -994,6 +1001,5 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 10,
     padding: 10,
-    position: 'relative',
   },
 });

@@ -2,6 +2,7 @@ import { partyIds } from './seed';
 import type { RegionId } from '../types/region';
 import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/regionalAggregation';
 import type { VoterPoint } from '../simulation/model/types';
+import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
 import { createIssueLayerState } from './issueSeed';
 import {
   activateCampaignPackage as activateCampaignPackageInLayer,
@@ -150,6 +151,7 @@ function hasComputedSupport(state: GameState) {
 
 export function previewActionImpact(state: GameState, plannedAction: PlannedAction) {
   const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
+  const actionV2Preview = previewCampaignActionV2(state, plannedAction);
   const advisor = currentMarketingAdvisor(state);
   const delta = estimateActionPreviewDelta(state, plannedAction);
   const uncertainty = Math.max(
@@ -162,7 +164,11 @@ export function previewActionImpact(state: GameState, plannedAction: PlannedActi
   return {
     delta,
     label:
-      advisor.level >= 2
+      actionV2Preview && advisor.level >= 2
+        ? `${actionV2Preview.action.name}: ${actionV2Preview.label}`
+        : actionV2Preview
+        ? `${actionV2Preview.action.name}: ${actionV2Preview.action.preview.shortEffectLabel ?? 'strukturovany dopad'}`
+        : advisor.level >= 2
         ? `${action?.name ?? 'Akce'}: odhad ${formatSignedPoints(low)} až ${formatSignedPoints(high)} b.`
         : `${action?.name ?? 'Akce'}: hrubý odhad ${formatSignedPoints(delta)} b.`,
     risk: action?.risk ?? 'nízké',
@@ -677,7 +683,9 @@ function computeRegionalSupportFromParticles(state: GameState, precision: Suppor
       total += utility;
     }
 
-    const turnout = clamp(point.turnoutBase + region.turnoutModifier, 0.22, 0.92);
+    // TODO(v0.6 turnout): separate turnout probability from party choice allocation.
+    // The current engine still keeps baselineAbstain in the party utility denominator for compatibility.
+    const turnout = preparedTurnoutProbability(point.turnoutBase, region.turnoutModifier);
     const voterTurnoutWeight = point.weight * turnout;
 
     for (let index = 0; index < partyContexts.length; index += 1) {
@@ -815,6 +823,13 @@ function applyIssueLayerToPlayer(state: GameState) {
 }
 
 function applyAction(state: GameState, plannedAction: PlannedAction, actionEffects: string[], riskNotes: string[]) {
+  const actionV2Result = applyCampaignActionV2(state, plannedAction);
+  if (actionV2Result.handled) {
+    actionEffects.push(...actionV2Result.actionEffects);
+    riskNotes.push(...actionV2Result.riskNotes);
+    return;
+  }
+
   const action = state.actions.find((item) => item.id === plannedAction.actionId);
   const runtime = state.partyRuntime.player;
 
@@ -1514,6 +1529,7 @@ function resetLeaderWeek(state: GameState) {
     runtime.leader.timeUsed = 0;
     runtime.leader.fatigue = clamp(runtime.leader.fatigue - 0.04, 0, 1);
     runtime.leader.energy = clamp(1 - runtime.leader.fatigue, 0, 1);
+    runtime.staffUsed = 0;
   }
 }
 

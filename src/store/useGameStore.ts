@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { campaignActionsV2, legacyCampaignActionV2ById } from '@/src/game/campaignActionsV2';
 import {
   acceptSponsor,
   activateCampaignPackage as applyCampaignPackage,
@@ -35,6 +36,7 @@ type GameStore = {
   isHydrated: boolean;
   plannedActions: PlannedAction[];
   planAction: (actionId: CampaignActionId, targetRegionId?: RegionId) => void;
+  planCampaignActionV2: (actionV2Id: string, targetRegionId?: RegionId) => void;
   removePlannedAction: (plannedActionId: string) => void;
   resetGame: () => void;
   respondToInvitation: (invitationId: string, response: NonNullable<MediaInvitation['response']>) => void;
@@ -58,18 +60,25 @@ function asFullRealismState(state: GameState): GameState {
       partyId,
       {
         ...runtime,
+        actionCooldowns: runtime.actionCooldowns ?? {},
+        legalExposure: runtime.legalExposure ?? 0,
         marketingAdvisorId: runtime.marketingAdvisorId ?? 'none',
+        mediaVulnerability: runtime.mediaVulnerability ?? state.issueLayer?.player?.mediaVulnerability ?? 0,
+        staffCap: runtime.staffCap ?? state.rules?.maxActionsPerWeek ?? 3,
+        staffUsed: runtime.staffUsed ?? 0,
       },
     ]),
   ) as GameState['partyRuntime'];
 
   return {
     ...state,
+    campaignActionsV2: state.campaignActionsV2 ?? campaignActionsV2,
     issueLayer: state.issueLayer ?? createIssueLayerState(),
     marketingAdvisors: state.marketingAdvisors ?? marketingAdvisors,
     mode: 'fullRealism',
     partyRuntime,
     publicPollsterId: state.publicPollsterId ?? 'medianPlus',
+    turnoutModifiers: state.turnoutModifiers ?? [],
   };
 }
 
@@ -106,16 +115,24 @@ function createGameWithSelectedParty(selectedPartyId: PartyId) {
 
 function plannedCost(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
+    const action =
+      state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id) ??
+      state.actions.find((candidate) => candidate.id === plannedAction.actionId);
     return sum + (action?.cost ?? 0);
   }, 0);
 }
 
 function plannedCapacity(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
+    const actionV2 = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
     const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
-    return sum + (action?.capacityCost ?? 0);
+    return sum + (actionV2?.staffCost ?? action?.capacityCost ?? 0);
   }, 0);
+}
+
+function legacyActionIdForActionV2(actionV2Id: string): CampaignActionId {
+  const legacyEntry = Object.entries(legacyCampaignActionV2ById).find(([, mappedId]) => mappedId === actionV2Id);
+  return (legacyEntry?.[0] as CampaignActionId | undefined) ?? 'regionalRally';
 }
 
 function persist(state: GameState, plannedActions: PlannedAction[] = []) {
@@ -207,6 +224,44 @@ export const useGameStore = create<GameStore>((set, get) => ({
       {
         actionId,
         id: `${actionId}-${targetRegionId ?? 'national'}-${gameState.week}-${plannedActions.length}`,
+        targetRegionId,
+      },
+    ];
+
+    set({ plannedActions: nextPlannedActions });
+    persist(gameState, nextPlannedActions);
+  },
+  planCampaignActionV2: (actionV2Id, targetRegionId) => {
+    const { gameState, plannedActions } = get();
+    const action = gameState.campaignActionsV2.find((item) => item.id === actionV2Id);
+    const runtime = gameState.partyRuntime.player;
+
+    if (!action || plannedActions.length >= gameState.rules.maxActionsPerWeek) {
+      return;
+    }
+
+    if (runtime.cash < plannedCost(gameState, plannedActions) + action.cost) {
+      return;
+    }
+
+    if (action.legality !== 'illegal' && runtime.legalSpend + plannedCost(gameState, plannedActions) + action.cost > gameState.rules.legalSpendCap) {
+      return;
+    }
+
+    if (plannedCapacity(gameState, plannedActions) + action.staffCost > (runtime.staffCap ?? gameState.rules.maxActionsPerWeek)) {
+      return;
+    }
+
+    if (action.target.scope === 'region' && !targetRegionId) {
+      return;
+    }
+
+    const nextPlannedActions = [
+      ...plannedActions,
+      {
+        actionId: legacyActionIdForActionV2(actionV2Id),
+        actionV2Id,
+        id: `${actionV2Id}-${targetRegionId ?? 'national'}-${gameState.week}-${plannedActions.length}`,
         targetRegionId,
       },
     ];
