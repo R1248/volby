@@ -2,6 +2,7 @@ import voterFieldData from '../data/voterField.v03.json';
 import clusteredRegionalVoterFieldData from '../data/voterField.v03.regionalized.clustered.json';
 import regionalVoterFieldData from '../data/voterField.v03.regionalized.json';
 import { dimensionIds, isCompleteVector8D } from './dimensions';
+import { enrichGreenDealIssuePreferences } from './greenDealIssue';
 import { krajeById } from './regionalEnrichment';
 import type {
   CompactRegionalVoterFieldData,
@@ -31,7 +32,7 @@ export function loadClusteredRegionalizedVoterFieldV03(): VoterFieldBundle {
 }
 
 export function decodeCompactVoterField(data: CompactVoterFieldData): VoterFieldBundle {
-  const points = data.points.map((row, index) => decodePoint(data, row, index));
+  const points = enrichGreenDealIssuePreferences(data.points.map((row, index) => decodePoint(data, row, index)));
   const positions = new Float32Array(points.length * dimensionIds.length);
   const turnoutBase = new Float32Array(points.length);
   const volatility = new Float32Array(points.length);
@@ -61,7 +62,7 @@ export function decodeCompactVoterField(data: CompactVoterFieldData): VoterField
 }
 
 export function decodeRegionalizedVoterField(data: CompactRegionalVoterFieldData): VoterFieldBundle {
-  const points = data.points.map((row, index) => decodeRegionalPoint(data, row, index));
+  const points = enrichGreenDealIssuePreferences(data.points.map((row, index) => decodeRegionalPoint(data, row, index)));
   const positions = new Float32Array(points.length * dimensionIds.length);
   const turnoutBase = new Float32Array(points.length);
   const volatility = new Float32Array(points.length);
@@ -118,7 +119,6 @@ function decodePoint(data: CompactVoterFieldData, row: number[], index: number):
     establishment: row[12],
     globalism: row[13],
     green: row[14],
-    green_deal: row[16],
     ukraine: row[15],
   } satisfies Partial<Record<DimensionId, number>>;
 
@@ -132,6 +132,9 @@ function decodePoint(data: CompactVoterFieldData, row: number[], index: number):
     ageGroup: data.dictionaries.ageGroups[row[2]],
     education: data.dictionaries.education[row[3]],
     id: index,
+    legacy: {
+      greenDealPropensityRaw: row[16],
+    },
     leftRight: data.dictionaries.leftRight[row[5]],
     position,
     regionId: data.dictionaries.regions[row[1]],
@@ -151,7 +154,6 @@ function decodeRegionalPoint(data: CompactRegionalVoterFieldData, row: number[],
     establishment: row[15],
     globalism: row[16],
     green: row[17],
-    green_deal: row[19],
     ukraine: row[18],
   } satisfies Partial<Record<DimensionId, number>>;
 
@@ -177,6 +179,9 @@ function decodeRegionalPoint(data: CompactRegionalVoterFieldData, row: number[],
     },
     id: index,
     incomeProxy: row[20],
+    legacy: {
+      greenDealPropensityRaw: row[19],
+    },
     leftRight: data.dictionaries.leftRight[row[6]],
     parentParticleId: String(row[21]),
     position,

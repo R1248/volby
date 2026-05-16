@@ -157,7 +157,7 @@ function applyFieldEffects(state: GameState, action: CampaignActionV2) {
   const runtime = state.partyRuntime.player;
   const field = runtime.field;
   field.center8D = field.center8D ?? completeLatentVector(field.latentCenter ?? field.center);
-  field.width8D = field.width8D ?? completeLatentVector({ ...field.width, establishment: 0.74, globalism: 0.72, green: 0.68, green_deal: 0.66, ukraine: 0.66 });
+  field.width8D = field.width8D ?? completeLatentVector({ ...field.width, establishment: 0.74, globalism: 0.72, green: 0.68, ukraine: 0.66 });
 
   if (action.effects.fieldAmplitude) {
     field.amplitude = clamp(field.amplitude + action.effects.fieldAmplitude, 0.35, 1.8);
@@ -485,7 +485,6 @@ function completeLatentVector(vector: Partial<Record<string, number>>): LatentVe
     establishment: clamp(vector.establishment ?? 0, -1, 1),
     globalism: clamp(vector.globalism ?? 0, -1, 1),
     green: clamp(vector.green ?? 0, -1, 1),
-    green_deal: clamp(vector.green_deal ?? 0, -1, 1),
     ukraine: clamp(vector.ukraine ?? 0, -1, 1),
   };
 }

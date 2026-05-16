@@ -6,10 +6,12 @@ const minWidth = 0.05;
 export function computePartyAttraction(voter: VoterPoint, party: PartyField): AttractionResult {
   const distanceSquared = computeDistanceSquared(voter, party);
   const ideologicalFit = Math.exp(-0.5 * distanceSquared);
+  const issueFit = computeIssueFit(voter, party);
   const regionalOrganizationMultiplier =
     voter.regionId && party.regionOrganization ? party.regionOrganization[voter.regionId] ?? 1 : 1;
   const attraction =
     ideologicalFit *
+    issueFit *
     party.amplitude *
     party.brandAwareness *
     party.leaderEffect *
@@ -33,4 +35,34 @@ export function computeDistanceSquared(voter: VoterPoint, party: PartyField) {
 
     return sum + importance * normalizedDistance * normalizedDistance;
   }, 0);
+}
+
+function computeIssueFit(voter: VoterPoint, party: PartyField) {
+  const issues = Object.entries(party.issuePositions ?? {});
+  if (issues.length === 0) {
+    return 1;
+  }
+
+  let score = 0;
+  let weight = 0;
+  for (const [issueId, issuePosition] of issues) {
+    if (!issuePosition || issuePosition.salience <= 0) {
+      continue;
+    }
+    const voterPosition = voter.issuePreferences?.[issueId];
+    if (voterPosition === undefined) {
+      continue;
+    }
+
+    const closeness = 1 - Math.abs(voterPosition - issuePosition.position) / 4;
+    const issueWeight = Math.max(0, issuePosition.salience);
+    score += (closeness - 0.5) * issueWeight;
+    weight += issueWeight;
+  }
+
+  if (weight <= 0) {
+    return 1;
+  }
+
+  return Math.max(0.55, 1 + (score / weight) * 0.28);
 }

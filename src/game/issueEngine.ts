@@ -27,7 +27,6 @@ export const latentDimensions: LatentDimension[] = [
   'globalism',
   'green',
   'ukraine',
-  'green_deal',
 ];
 
 export const coherenceWeights = {
@@ -476,7 +475,10 @@ export function calculateIssueFitForVoter(
       continue;
     }
 
-    const voterPreference = inferVoterIssuePreference(segment, issue);
+    const explicitPreference = segment.issuePrefs[issue.id as keyof typeof segment.issuePrefs];
+    const voterPreference = explicitPreference !== undefined
+      ? clamp(explicitPreference / 2, -1, 1)
+      : inferVoterIssuePreference(segment, issue);
     const partyPosition = clamp(position.position / 2, -1, 1);
     const closeness = 1 - Math.abs(voterPreference - partyPosition) / 2;
     const salienceWeight = 0.08 + position.salience * 0.08 + issue.defaultSalience * 0.08;
@@ -644,7 +646,7 @@ function inferVoterIssuePreference(segment: VoterSegment, issue: Issue) {
   let sum = 0;
   let weight = 0;
   for (const [dimension, loading] of Object.entries(issue.dimensionLoadings) as [LatentDimension, number][]) {
-    const voterValue = dimension === 'green_deal' ? space.greenDeal : space[dimension];
+    const voterValue = space[dimension];
     sum += voterValue * loading;
     weight += Math.abs(loading);
   }
@@ -756,7 +758,6 @@ function emptyVector(): LatentVector {
     establishment: 0,
     globalism: 0,
     green: 0,
-    green_deal: 0,
     ukraine: 0,
   };
 }

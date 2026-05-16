@@ -25,6 +25,7 @@ export const regionalCampaignEvents: RegionalCampaignEffectSeed[] = [
     name: 'Brno business and technology forum',
     target: {
       educationGroups: ['tertiary'],
+      issueAffinityFilter: { greenDeal: [-0.2, 2] },
       krajIds: ['CZ064'],
       latentFilter: { culture: [-1, 0.3], econ: [0, 1], globalism: [0, 1] },
       metroAreas: ['brno'],
@@ -41,8 +42,9 @@ export const regionalCampaignEvents: RegionalCampaignEffectSeed[] = [
     id: 'ostrava-energy-industry',
     name: 'Ostrava energy and industry meeting',
     target: {
+      issueAffinityFilter: { greenDeal: [-2, 0.4] },
       krajIds: ['CZ080'],
-      latentFilter: { econ: [-0.5, 0.7], green_deal: [-1, 0.4] },
+      latentFilter: { econ: [-0.5, 0.7] },
       metroAreas: ['ostrava'],
       urbanity: ['large_town', 'metro'],
     },
@@ -50,12 +52,13 @@ export const regionalCampaignEvents: RegionalCampaignEffectSeed[] = [
   {
     effects: {
       awarenessDelta: 0.04,
-      issueSalienceDelta: { euIntegration: 0.03, housing: 0.05, sameSexMarriage: 0.03 },
+      issueSalienceDelta: { euIntegration: 0.03, greenDeal: 0.03, housing: 0.05, sameSexMarriage: 0.03 },
     },
     id: 'praha-liberal-urban',
     name: 'Praha liberal urban event',
     target: {
       educationGroups: ['tertiary'],
+      issueAffinityFilter: { greenDeal: [0, 2] },
       krajIds: ['CZ010'],
       latentFilter: { culture: [-1, 0], establishment: [0, 1], globalism: [0, 1] },
       metroAreas: ['praha'],
@@ -64,13 +67,14 @@ export const regionalCampaignEvents: RegionalCampaignEffectSeed[] = [
   },
   {
     effects: {
-      issueSalienceDelta: { energyPrices: 0.04, nationalSovereignty: 0.02, pensions: 0.04 },
+      issueSalienceDelta: { energyPrices: 0.04, greenDeal: 0.03, nationalSovereignty: 0.02, pensions: 0.04 },
       trustDelta: 0.03,
       turnoutDelta: 0.02,
     },
     id: 'vysocina-rural-meeting',
     name: 'Vysocina rural meeting',
     target: {
+      issueAffinityFilter: { greenDeal: [-2, 0.5] },
       krajIds: ['CZ063'],
       urbanity: ['rural', 'town'],
     },

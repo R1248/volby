@@ -7,17 +7,19 @@ export type Vec3 = {
   econ: number;
 };
 
-export type LatentDimension8D =
+export type LatentDimension7D =
   | 'authority'
   | 'culture'
   | 'econ'
   | 'establishment'
   | 'globalism'
   | 'green'
-  | 'green_deal'
   | 'ukraine';
 
-export type LatentVector8D = Record<LatentDimension8D, number>;
+// Compatibility alias while older runtime field names migrate away from "8D".
+export type LatentDimension8D = LatentDimension7D;
+export type LatentVector7D = Record<LatentDimension7D, number>;
+export type LatentVector8D = LatentVector7D;
 
 export type IssueId =
   | 'housing'
@@ -27,6 +29,7 @@ export type IssueId =
   | 'climate'
   | 'industry'
   | 'education'
+  | 'greenDeal'
   | 'taxes';
 
 export type PartyId = 'player' | 'civicFront' | 'greenFuture' | 'laborUnion' | 'regionalVoice';

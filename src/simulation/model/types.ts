@@ -5,10 +5,15 @@ export type DimensionId =
   | 'establishment'
   | 'globalism'
   | 'green'
-  | 'ukraine'
-  | 'green_deal';
+  | 'ukraine';
 
-export type LatentVector8D = Record<DimensionId, number>;
+export type LatentVector7D = Record<DimensionId, number>;
+
+// Backwards-compatible alias while the rest of the app migrates names from 8D to 7D.
+export type LatentVector8D = LatentVector7D;
+export type IssueId = 'greenDeal' | string;
+export type IssuePosition = number;
+export type GreenDealAttitude = 'threat' | 'mixed' | 'opportunity';
 
 export type SegmentLabel = 'trad_left' | 'lib_left' | 'center' | 'trad_right' | 'lib_right';
 
@@ -47,7 +52,7 @@ export type KrajProfile = {
   electorateWeightWithinNuts2: number;
   krajId: KrajId;
   krajName: string;
-  latentProfileHint?: Partial<Record<DimensionId, number>>;
+  latentProfileHint?: Partial<Record<DimensionId | 'green_deal', number>>;
   metroAreaShares?: Partial<Record<MetroArea, number>>;
   notes?: string;
   nuts2Id: Nuts2Id;
@@ -63,6 +68,11 @@ export type VoterPoint = {
   leftRight?: string;
   parentParticleId?: string;
   position: LatentVector8D;
+  issuePreferences?: Partial<Record<IssueId, IssuePosition>>;
+  greenDealAttitude?: GreenDealAttitude;
+  legacy?: {
+    greenDealPropensityRaw?: number;
+  };
   regionId?: string;
   segmentLabel?: SegmentLabel;
   socioEconomicStatus?: SocioEconomicStatus;
@@ -80,6 +90,11 @@ export type PartyField = {
   consistency: number;
   credibility: number;
   id: string;
+  issuePositions?: Partial<Record<IssueId, {
+    framingId?: string;
+    position: IssuePosition;
+    salience: number;
+  }>>;
   leaderEffect: number;
   name: string;
   regionOrganization?: Record<string, number>;
@@ -118,7 +133,7 @@ export type CompactVoterFieldData = {
     segments: SegmentLabel[];
     urbanity: string[];
   };
-  dimensions: DimensionId[];
+  dimensions: (DimensionId | 'green_deal')[];
   pointColumns: readonly [
     'weight',
     'region',
@@ -156,7 +171,7 @@ export type CompactRegionalVoterFieldData = {
     socioEconomicStatus: SocioEconomicStatus[];
     urbanity: Urbanity[];
   };
-  dimensions: DimensionId[];
+  dimensions: (DimensionId | 'green_deal')[];
   parentPointCount: number;
   pointColumns: string[];
   points: number[][];

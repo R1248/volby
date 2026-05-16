@@ -7,8 +7,7 @@ export type LatentDimension =
   | 'establishment'
   | 'globalism'
   | 'green'
-  | 'ukraine'
-  | 'green_deal';
+  | 'ukraine';
 
 export type LatentVector = Record<LatentDimension, number>;
 
@@ -18,6 +17,7 @@ export type IssueDomain =
   | 'economy'
   | 'foreign_policy'
   | 'green'
+  | 'energy'
   | 'institutions'
   | 'migration'
   | 'welfare';

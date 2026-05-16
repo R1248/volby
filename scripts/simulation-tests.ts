@@ -1,12 +1,14 @@
 import { resolveSupport } from '../src/simulation/engine/resolveSupport';
 import { checkNmsTargets } from '../src/simulation/engine/sanityChecks';
+import { greenDealWeightedDistribution } from '../src/simulation/model/greenDealIssue';
 import { dimensionIds } from '../src/simulation/model/dimensions';
 import { partySeedsV03 } from '../src/simulation/model/partySeeds';
 import { loadVoterFieldV03 } from '../src/simulation/model/voterFieldLoader';
 
 const voterField = loadVoterFieldV03();
 
-assertEqual(dimensionIds.length, 8, 'v0.3 must contain exactly 8 dimensions');
+assertEqual(dimensionIds.length, 7, 'v0.5 latent compass must contain exactly 7 dimensions');
+assertOk(!dimensionIds.includes('green_deal' as never), 'green_deal must not be a core latent dimension');
 
 for (const party of partySeedsV03) {
   for (const dimension of dimensionIds) {
@@ -21,6 +23,10 @@ assertEqual(voterField.points.length, 50000, 'weighted field must load all 50,00
 
 for (const point of voterField.points) {
   assertOk(Number.isFinite(point.weight) && point.weight > 0, `Invalid weight for voter ${point.id}`);
+  assertOk(Number.isFinite(point.legacy?.greenDealPropensityRaw ?? 0), `Legacy Green Deal raw value should load for voter ${point.id}`);
+  assertOk(Number.isFinite(point.issuePreferences?.greenDeal), `Missing Green Deal issue preference for voter ${point.id}`);
+  assertOk(Boolean(point.greenDealAttitude), `Missing Green Deal attitude for voter ${point.id}`);
+  assertOk(!('green_deal' in point.position), `green_deal must not be present in core latent position for voter ${point.id}`);
 
   for (const dimension of dimensionIds) {
     const value = point.position[dimension];
@@ -28,6 +34,11 @@ for (const point of voterField.points) {
     assertOk(value >= -1 && value <= 1, `${dimension} out of [-1, 1] for voter ${point.id}: ${value}`);
   }
 }
+
+const greenDealDistribution = greenDealWeightedDistribution(voterField.points);
+assertOk(Math.abs(greenDealDistribution.threat - 0.6) < 0.03, `Green Deal threat share ${greenDealDistribution.threat} should be near 0.60`);
+assertOk(Math.abs(greenDealDistribution.mixed - 0.12) < 0.03, `Green Deal mixed share ${greenDealDistribution.mixed} should be near 0.12`);
+assertOk(Math.abs(greenDealDistribution.opportunity - 0.28) < 0.03, `Green Deal opportunity share ${greenDealDistribution.opportunity} should be near 0.28`);
 
 for (const targetCheck of checkNmsTargets(voterField.points, 0.002)) {
   assertOk(

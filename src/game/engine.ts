@@ -46,7 +46,6 @@ const latentDimensions8D: LatentDimension8D[] = [
   'globalism',
   'green',
   'ukraine',
-  'green_deal',
 ];
 
 export function initializeComputedState(state: GameState): GameState {
@@ -571,7 +570,9 @@ let cachedRegionalWeights: Record<string, number> | undefined;
 type CompactRegionalVoterPoint = {
   ageGroup?: string;
   education?: string;
+  greenDealAttitude?: string;
   id: number;
+  issuePreferences?: Partial<Record<string, number>>;
   leftRight?: string;
   position: LatentVector8D;
   regionId: RegionId;
@@ -626,7 +627,9 @@ function getCompactRegionalVoterPoints(precision: SupportPrecision) {
       points.push({
         ageGroup: point.ageGroup,
         education: point.education,
+        greenDealAttitude: point.greenDealAttitude,
         id: point.id,
+        issuePreferences: point.issuePreferences,
         leftRight: point.leftRight,
         position: point.position,
         regionId,
@@ -739,7 +742,7 @@ function compactPointToSegment(point: CompactRegionalVoterPoint): VoterSegment {
     axisSalience: { authority: 1, culture: 1, econ: 1 },
     education: point.education === 'lower' || point.education === 'tertiary' ? point.education : 'secondary',
     id: `particle-${point.id}`,
-    issuePrefs: {},
+    issuePrefs: point.issuePreferences?.greenDeal === undefined ? {} : { greenDeal: point.issuePreferences.greenDeal },
     issueSalience: {},
     leftRightSelfPlacement: point.leftRight,
     mediaHabits: {},
@@ -759,7 +762,7 @@ function compactPointToSegment(point: CompactRegionalVoterPoint): VoterSegment {
       establishment: point.position.establishment,
       globalism: point.position.globalism,
       green: point.position.green,
-      greenDeal: point.position.green_deal,
+      greenDeal: point.issuePreferences?.greenDeal ?? 0,
       ukraine: point.position.ukraine,
     },
     turnoutBase: point.turnoutBase,
@@ -1400,7 +1403,7 @@ function widenFieldForIssue(field: GameState['partyRuntime'][PartyId]['field'], 
 }
 
 function issueLabel(issue: IssueId) {
-  const labels: Record<IssueId, string> = {
+  const labels: Partial<Record<IssueId, string>> = {
     climate: 'klimatu',
     education: 'školství',
     healthcare: 'zdravotnictví',
@@ -1411,7 +1414,7 @@ function issueLabel(issue: IssueId) {
     transport: 'dopravy',
   };
 
-  return labels[issue];
+  return labels[issue] ?? issue;
 }
 
 function applyScandals(state: GameState, riskNotes: string[]) {
@@ -1617,7 +1620,6 @@ function inferPartyCenter8D(party: GameState['parties'][number], fieldRuntime: G
   const security = party.issuePositions.security ?? 0;
   const transport = party.issuePositions.transport ?? 0;
   const industry = party.issuePositions.industry ?? 0;
-  const taxes = party.issuePositions.taxes ?? 0;
   const field = fieldRuntime.center;
   const latent = fieldRuntime.latentCenter;
 
@@ -1632,7 +1634,6 @@ function inferPartyCenter8D(party: GameState['parties'][number], fieldRuntime: G
     ),
     globalism: clamp(latent?.globalism ?? -field.culture * 0.45 - field.authority * 0.25 - security * 0.18 + industry * 0.08, -1, 1),
     green: clamp(latent?.green ?? -climate * 0.72 - transport * 0.12 - industry * 0.08, -1, 1),
-    green_deal: clamp(latent?.green_deal ?? -climate * 0.62 - taxes * 0.12 - industry * 0.12 + field.econ * 0.08, -1, 1),
     ukraine: clamp(latent?.ukraine ?? -field.authority * 0.3 - field.culture * 0.16 + security * 0.28 + party.reputation.consistency * 0.12 - 0.06, -1, 1),
   });
 }
@@ -1654,7 +1655,6 @@ function legacyFieldWidth8D(field: GameState['partyRuntime'][PartyId]['field']):
     establishment: 0.74,
     globalism: 0.72,
     green: 0.68,
-    green_deal: 0.66,
     ukraine: 0.66,
   });
 }
@@ -1667,7 +1667,6 @@ function defaultFieldSalience8D(): LatentVector8D {
     establishment: 0.85,
     globalism: 0.9,
     green: 0.85,
-    green_deal: 0.85,
     ukraine: 0.9,
   });
 }
@@ -1680,7 +1679,6 @@ function completeLatentVector(vector: Partial<Record<string, number>>): LatentVe
     establishment: clamp(vector.establishment ?? 0, -1, 1),
     globalism: clamp(vector.globalism ?? 0, -1, 1),
     green: clamp(vector.green ?? 0, -1, 1),
-    green_deal: clamp(vector.green_deal ?? 0, -1, 1),
     ukraine: clamp(vector.ukraine ?? 0, -1, 1),
   };
 }

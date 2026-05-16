@@ -1,5 +1,7 @@
 import type { DimensionId, LatentVector8D, SegmentLabel } from './types';
 
+// Core compass dimensions. Green Deal is intentionally excluded: it is a concrete issue,
+// not a deep latent identity dimension. Old voter files may still carry green_deal as legacy data.
 export const dimensionIds = [
   'econ',
   'culture',
@@ -8,7 +10,6 @@ export const dimensionIds = [
   'globalism',
   'green',
   'ukraine',
-  'green_deal',
 ] as const satisfies readonly DimensionId[];
 
 export const defaultVoterSalience = vector8D(1);
@@ -29,7 +30,6 @@ export function vector8D(value: number): LatentVector8D {
     establishment: value,
     globalism: value,
     green: value,
-    green_deal: value,
     ukraine: value,
   };
 }

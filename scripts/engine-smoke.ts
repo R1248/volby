@@ -51,26 +51,27 @@ const baseState = initializeComputedState(createInitialGameState());
 assertHealthyState(baseState);
 for (const partyId of partyIds) {
   const field = baseState.partyRuntime[partyId].field;
-  for (const dimension of ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine', 'green_deal'] as const) {
+  for (const dimension of ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine'] as const) {
     assert(typeof field.center8D?.[dimension] === 'number', `${partyId} must have center8D.${dimension}`);
     assert(typeof field.width8D?.[dimension] === 'number', `${partyId} must have width8D.${dimension}`);
     assert(typeof field.salience8D?.[dimension] === 'number', `${partyId} must have salience8D.${dimension}`);
   }
+  assert(!('green_deal' in (field.center8D ?? {})), `${partyId} center8D must not contain legacy green_deal`);
+  assert(!('green_deal' in (field.width8D ?? {})), `${partyId} width8D must not contain legacy green_deal`);
+  assert(!('green_deal' in (field.salience8D ?? {})), `${partyId} salience8D must not contain legacy green_deal`);
 }
 
 const issueShifted = updateProgramIssue(baseState, 'greenDeal', { position: 2, salience: 4 });
 assert(
-  issueShifted.partyRuntime.player.field.center8D?.green_deal !== baseState.partyRuntime.player.field.center8D?.green_deal,
-  'Program issue changes must update the player 8D center',
+  issueShifted.issueLayer.player.currentIssuePositions.greenDeal.position === 2,
+  'Green Deal program issue changes must update the issue layer',
 );
 
-const greenDealLow = JSON.parse(JSON.stringify(baseState)) as GameState;
-const greenDealHigh = JSON.parse(JSON.stringify(baseState)) as GameState;
-greenDealLow.partyRuntime.civicFront.field.center8D = { ...greenDealLow.partyRuntime.civicFront.field.center8D!, green_deal: -1 };
-greenDealHigh.partyRuntime.civicFront.field.center8D = { ...greenDealHigh.partyRuntime.civicFront.field.center8D!, green_deal: 1 };
-const lowSupport = computeNationalSupport(greenDealLow, computeRegionalSupport(greenDealLow)).civicFront;
-const highSupport = computeNationalSupport(greenDealHigh, computeRegionalSupport(greenDealHigh)).civicFront;
-assert(Math.abs(lowSupport - highSupport) > 0.0001, 'Changing only green_deal in 8D center must affect support');
+const greenDealOpposed = updateProgramIssue(baseState, 'greenDeal', { position: -2, salience: 4 });
+const greenDealSupportive = updateProgramIssue(baseState, 'greenDeal', { position: 2, salience: 4 });
+const opposedSupport = computeNationalSupport(greenDealOpposed, computeRegionalSupport(greenDealOpposed)).player;
+const supportiveSupport = computeNationalSupport(greenDealSupportive, computeRegionalSupport(greenDealSupportive)).player;
+assert(Math.abs(opposedSupport - supportiveSupport) > 0.0001, 'Green Deal issue position must affect support through issue fit');
 
 const plannedActions: PlannedAction[] = [
   { actionId: 'regionalRally', id: 'smoke-rally', targetRegionId: 'moravskoslezsky' },

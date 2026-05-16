@@ -46,7 +46,8 @@ assertOk(packagedAgenda < overloadedAgenda, 'Coherent package should reduce agen
 
 const latent = deriveLatentFromIssues(layer.player.currentIssuePositions, layer.issues, layer.framings);
 assertOk(typeof latent.econ === 'number', 'Derived latent econ should be numeric');
-assertOk(typeof latent.green_deal === 'number', 'Derived latent green_deal should be numeric');
+assertOk(typeof latent.green === 'number', 'Derived latent green should be numeric');
+assertOk(!('green_deal' in latent), 'Derived latent vector must not reintroduce green_deal');
 
 const coherence = calculatePartyCoherence(layer.player, layer.issues, layer.relations, layer.ideologicalFrames, layer.campaignPackages, 0.6);
 assertOk(coherence.coherenceScore >= 0 && coherence.coherenceScore <= 100, 'Coherence score should be in [0, 100]');

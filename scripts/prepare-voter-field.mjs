@@ -7,7 +7,9 @@ const outputPath = path.resolve('src/simulation/data/voterField.v03.json');
 const regionalOutputPath = path.resolve('src/simulation/data/voterField.v03.regionalized.json');
 const clusteredRegionalOutputPath = path.resolve('src/simulation/data/voterField.v03.regionalized.clustered.json');
 const regionalProfilePath = path.resolve('src/simulation/data/krajProfiles.v03.json');
-const dimensionColumns = ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine', 'green_deal'];
+const dimensionColumns = ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine'];
+const legacyGreenDealColumn = 'green_deal';
+const pointValueColumns = [...dimensionColumns, legacyGreenDealColumn];
 const segmentOrder = ['trad_left', 'lib_left', 'center', 'trad_right', 'lib_right'];
 
 const sourcePath = resolveSourcePath(process.argv[2]);
@@ -46,6 +48,7 @@ const parentEntries = [];
 for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
   const columns = parseCsvLine(lines[lineIndex]);
   const position = Object.fromEntries(dimensionColumns.map((dimension) => [dimension, readNumber(columns, index[dimension])]));
+  const legacyGreenDeal = readNumber(columns, index[legacyGreenDealColumn]);
   const ageGroup = readString(columns, index.age4);
   const education = readString(columns, index.education3);
   const leftRight = readString(columns, index.left_right3);
@@ -68,6 +71,7 @@ for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     turnoutBase,
     volatility,
     ...dimensionColumns.map((dimension) => round(position[dimension], 6)),
+    round(legacyGreenDeal, 6),
   ]);
 
   parentEntries.push({
@@ -77,6 +81,7 @@ for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     nuts2Id: normalizeNuts2(region),
     parentId: lineIndex,
     position,
+    legacyGreenDeal,
     segment,
     turnoutBase,
     urbanity: normalizedUrbanity,
@@ -98,7 +103,7 @@ const data = {
     'segment',
     'turnoutBase',
     'volatility',
-    ...dimensionColumns,
+    ...pointValueColumns,
   ],
   points,
   source: 'ESS10+EB103 8D field with NMS weighted density calibration',
@@ -192,7 +197,8 @@ function buildRegionalizedData(parentPoints) {
         parent.volatility,
         dictionaryIndex(regionalDictionaries.metroAreas, metroArea),
         dictionaryIndex(regionalDictionaries.socioEconomicStatus, socioEconomicStatus),
-        ...dimensionColumns.map((dimension) => round(parent.position[dimension], 6)),
+      ...dimensionColumns.map((dimension) => round(parent.position[dimension], 6)),
+      round(parent.legacyGreenDeal, 6),
         incomeProxy,
         parent.parentId,
         round(child.probability, 6),
@@ -217,7 +223,7 @@ function buildRegionalizedData(parentPoints) {
       'volatility',
       'metroArea',
       'socioEconomicStatus',
-      ...dimensionColumns,
+      ...pointValueColumns,
       'incomeProxy',
       'parentParticleId',
       'syntheticRegionConfidence',
@@ -232,7 +238,7 @@ function buildRegionalizedData(parentPoints) {
 function buildClusteredRegionalData(regionalData) {
   const clusters = new Map();
   const clusteredPoints = [];
-  const clusterDimensionIndexes = [0, 1, 4, 7]; // econ, culture, globalism, green_deal preserve the main spatial divides.
+  const clusterDimensionIndexes = [0, 1, 4, 5]; // econ, culture, globalism, green preserve the main spatial divides.
   const clusterGridStep = 0.6;
 
   for (const row of regionalData.points) {
@@ -251,7 +257,7 @@ function buildClusteredRegionalData(regionalData) {
     if (!cluster) {
       cluster = {
         age: row[3],
-        dimensions: Object.fromEntries(dimensionColumns.map((dimension) => [dimension, 0])),
+        dimensions: Object.fromEntries(pointValueColumns.map((dimension) => [dimension, 0])),
         education: row[4],
         incomeProxy: 0,
         kraj: row[2],
@@ -274,8 +280,8 @@ function buildClusteredRegionalData(regionalData) {
     cluster.volatility += row[9] * weight;
     cluster.incomeProxy += row[20] * weight;
     cluster.syntheticRegionConfidence += row[22] * weight;
-    for (let dimensionIndex = 0; dimensionIndex < dimensionColumns.length; dimensionIndex += 1) {
-      cluster.dimensions[dimensionColumns[dimensionIndex]] += row[12 + dimensionIndex] * weight;
+    for (let dimensionIndex = 0; dimensionIndex < pointValueColumns.length; dimensionIndex += 1) {
+      cluster.dimensions[pointValueColumns[dimensionIndex]] += row[12 + dimensionIndex] * weight;
     }
   }
 
@@ -294,7 +300,7 @@ function buildClusteredRegionalData(regionalData) {
       round(cluster.volatility / weight, 4),
       cluster.metroArea,
       cluster.socioEconomicStatus,
-      ...dimensionColumns.map((dimension) => round(cluster.dimensions[dimension] / weight, 6)),
+      ...pointValueColumns.map((dimension) => round(cluster.dimensions[dimension] / weight, 6)),
       round(cluster.incomeProxy / weight, 4),
       clusteredPoints.length,
       round(cluster.syntheticRegionConfidence / weight, 6),

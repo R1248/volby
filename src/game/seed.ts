@@ -39,7 +39,6 @@ const latent8 = (
   globalism: number,
   green: number,
   ukraine: number,
-  greenDeal: number,
 ): LatentVector8D => ({
   authority,
   culture,
@@ -47,7 +46,6 @@ const latent8 = (
   establishment,
   globalism,
   green,
-  green_deal: greenDeal,
   ukraine,
 });
 
@@ -595,7 +593,6 @@ function inferSeedCenter8D(party: PartySeed): LatentVector8D {
   const climate = party.issuePositions.climate ?? 0;
   const security = party.issuePositions.security ?? 0;
   const industry = party.issuePositions.industry ?? 0;
-  const taxes = party.issuePositions.taxes ?? 0;
 
   return latent8(
     field.econ,
@@ -605,7 +602,6 @@ function inferSeedCenter8D(party: PartySeed): LatentVector8D {
     clampSeed(-field.culture * 0.45 - field.authority * 0.25 - security * 0.18 + industry * 0.08),
     clampSeed(-climate * 0.72 - industry * 0.08),
     clampSeed(-field.authority * 0.3 - field.culture * 0.16 + security * 0.28 + reputation.consistency * 0.12 - 0.06),
-    clampSeed(-climate * 0.62 - taxes * 0.12 - industry * 0.12 + field.econ * 0.08),
   );
 }
 
@@ -618,12 +614,11 @@ function inferSeedWidth8D(party: PartySeed): LatentVector8D {
     0.72,
     0.68,
     0.66,
-    0.66,
   );
 }
 
 function defaultSalience8D(): LatentVector8D {
-  return latent8(1, 1, 1, 0.85, 0.9, 0.85, 0.9, 0.85);
+  return latent8(1, 1, 1, 0.85, 0.9, 0.85, 0.9);
 }
 
 function clampSeed(value: number) {

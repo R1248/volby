@@ -38,9 +38,12 @@ for (const point of regional.points) {
 
   const parent = parentById.get(point.parentParticleId ?? '');
   assertOk(Boolean(parent), `Missing parent ${point.parentParticleId}`);
-  for (const dimension of ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine', 'green_deal'] as const) {
+  for (const dimension of ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine'] as const) {
     assertEqual(point.position[dimension], parent!.position[dimension], `Child should preserve parent ${dimension}`);
   }
+  assertOk(!('green_deal' in point.position), 'Child core latent position must not contain green_deal');
+  assertEqual(point.issuePreferences?.greenDeal, parent!.issuePreferences?.greenDeal, 'Child should preserve parent Green Deal issue preference');
+  assertEqual(point.greenDealAttitude, parent!.greenDealAttitude, 'Child should preserve parent Green Deal attitude');
 }
 
 for (const kraj of kraje) {

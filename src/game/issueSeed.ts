@@ -58,22 +58,35 @@ export const programIssues: Issue[] = [
   issue('nato', 'NATO', 'foreign_policy', 'Bezpecnostni ukotveni v NATO.', { ukraine: 0.55, globalism: 0.55, authority: 0.22 }, 0.5, 0.46, 0.54, 0.84),
   issue('ukraineSupport', 'Pomoc Ukrajine', 'foreign_policy', 'Vojenska, humanitarni a politicka podpora Ukrajine.', { ukraine: 0.95, globalism: 0.48, establishment: 0.2 }, 0.62, 0.78, 0.86, 0.78),
   issue('nationalSovereignty', 'Narodni suverenita', 'foreign_policy', 'Duvod pro domaci rozhodovani a odpor k prenosu pravomoci.', { globalism: -0.86, culture: 0.35, establishment: -0.25 }, 0.58, 0.64, 0.74, 0.72),
-  issue('greenDeal', 'Green Deal', 'green', 'Evropska zelena transformace.', { green_deal: 0.95, green: 0.68, globalism: 0.3, econ: -0.15 }, 0.66, 0.84, 0.9, 0.7),
-  issue('nuclearEnergy', 'Jadro', 'green', 'Role jadra v energetice.', { green_deal: 0.22, green: 0.08, authority: 0.18 }, 0.52, 0.38, 0.44, 0.78),
-  issue('coalPhaseout', 'Utlum uhli', 'green', 'Tempo odchodu od uhli.', { green: 0.72, green_deal: 0.72, econ: -0.12 }, 0.5, 0.7, 0.78, 0.66),
-  issue('energyPrices', 'Ceny energii', 'green', 'Dostupnost energie pro domacnosti a prumysl.', { econ: -0.28, green_deal: -0.42, authority: 0.1 }, 0.76, 0.58, 0.64, 0.86),
+  issue(
+    'greenDeal',
+    'Green Deal',
+    'green',
+    'Postoj k Evropske zelene dohode jako politickemu baliku: klimaticka transformace, evropska regulace, ceny energii, prumysl, doprava a naklady pro domacnosti.',
+    { green: 0.45, globalism: 0.3, establishment: 0.2, ukraine: 0.15, culture: -0.25, econ: -0.05 },
+    0.75,
+    0.9,
+    0.85,
+    0.65,
+  ),
+  issue('nuclearEnergy', 'Jadro', 'energy', 'Role jadra v energetice.', { green: 0.08, authority: 0.18, ukraine: 0.1 }, 0.52, 0.38, 0.44, 0.78),
+  issue('coalPhaseout', 'Utlum uhli', 'energy', 'Tempo odchodu od uhli.', { green: 0.72, econ: -0.12, establishment: 0.1 }, 0.5, 0.7, 0.78, 0.66),
+  issue('energyPrices', 'Ceny energii', 'energy', 'Dostupnost energie pro domacnosti a prumysl.', { econ: -0.28, authority: 0.1, establishment: -0.12 }, 0.76, 0.58, 0.64, 0.86),
 ];
 
 export const issueFramings: IssueFraming[] = [
   { id: 'equalRights', issueId: 'sameSexMarriage', name: 'Rovna prava', description: 'Tema je vysvetlene jako rovnost pred zakonem.', legibilityModifier: 0.12, controversyModifier: 0.04, baseMobilizationModifier: 0.06, swingAppealModifier: 0.02, dimensionEffects: { culture: -0.08 } },
   { id: 'noCultureWar', issueId: 'sameSexMarriage', name: 'Bez kulturni valky', description: 'Umirnene pravni reseni bez ostrych symbolu.', legibilityModifier: 0.06, controversyModifier: -0.12, baseMobilizationModifier: -0.02, swingAppealModifier: 0.08 },
   { id: 'traditionalFamily', issueId: 'sameSexMarriage', name: 'Tradicni rodina', description: 'Tema je zasazene do ochrany tradicni definice.', legibilityModifier: 0.08, controversyModifier: 0.08, baseMobilizationModifier: 0.05, swingAppealModifier: -0.06, dimensionEffects: { culture: 0.1 } },
-  { id: 'modernization', issueId: 'greenDeal', name: 'Modernizace', description: 'Zelena transformace jako investice do prumyslu.', legibilityModifier: 0.12, controversyModifier: -0.1, baseMobilizationModifier: 0.02, swingAppealModifier: 0.08, dimensionEffects: { green_deal: 0.05, econ: 0.06 } },
-  { id: 'energySecurity', issueId: 'greenDeal', name: 'Energeticka bezpecnost', description: 'Dulezite je snizit zavislosti a drzet ceny.', legibilityModifier: 0.08, controversyModifier: -0.08, baseMobilizationModifier: 0.04, swingAppealModifier: 0.06, dimensionEffects: { green_deal: -0.04, authority: 0.04 } },
-  { id: 'antiBureaucracy', issueId: 'greenDeal', name: 'Proti byrokracii', description: 'Kritika regulaci a administrativni zateze.', legibilityModifier: 0.08, controversyModifier: 0.08, baseMobilizationModifier: 0.08, swingAppealModifier: -0.04, dimensionEffects: { green_deal: -0.12, econ: 0.08 } },
+  { id: 'climateResponsibility', issueId: 'greenDeal', name: 'Klimaticka odpovednost', description: 'Green Deal jako nutna klimaticka transformace a odpovednost vuci budoucnosti.', legibilityModifier: 0.08, controversyModifier: 0.12, baseMobilizationModifier: 0.06, swingAppealModifier: 0.0, dimensionEffects: { green: 0.08, globalism: 0.04 } },
+  { id: 'modernization', issueId: 'greenDeal', name: 'Modernizace ekonomiky', description: 'Green Deal jako prilezitost pro inovace, energetickou bezpecnost a nove technologie.', legibilityModifier: 0.12, controversyModifier: -0.1, baseMobilizationModifier: 0.02, swingAppealModifier: 0.08, dimensionEffects: { econ: 0.06, green: 0.04 } },
+  { id: 'energySecurity', issueId: 'greenDeal', name: 'Energeticka bezpecnost', description: 'Transformace jako snizeni zavislosti na fosilnich palivech a geopoliticky rizikovych dodavatelich.', legibilityModifier: 0.08, controversyModifier: -0.08, baseMobilizationModifier: 0.04, swingAppealModifier: 0.06, dimensionEffects: { authority: 0.04, ukraine: 0.05 } },
+  { id: 'expensiveBureaucracy', issueId: 'greenDeal', name: 'Draha byrokracie z Bruselu', description: 'Green Deal jako preregulovany, drahy a socialne necitlivy evropsky projekt.', legibilityModifier: 0.06, controversyModifier: 0.1, baseMobilizationModifier: 0.08, swingAppealModifier: -0.05, dimensionEffects: { globalism: -0.08, establishment: -0.05 } },
+  { id: 'industrialThreat', issueId: 'greenDeal', name: 'Hrozba pro prumysl a domacnosti', description: 'Green Deal jako riziko pro ceny energii, prumysl, automobilky a domacnosti.', legibilityModifier: 0.06, controversyModifier: 0.14, baseMobilizationModifier: 0.08, swingAppealModifier: -0.08, dimensionEffects: { econ: -0.05, authority: 0.04 } },
+  { id: 'reformNotReject', issueId: 'greenDeal', name: 'Reformovat, ne odmitnout', description: 'Ekologicka modernizace ano, ale soucasny Green Deal je potreba upravit kvuli cenam, prumyslu a socialnim dopadum.', legibilityModifier: 0.04, controversyModifier: -0.12, baseMobilizationModifier: -0.01, swingAppealModifier: 0.1 },
   { id: 'westernSecurity', issueId: 'ukraineSupport', name: 'Zapadni bezpecnost', description: 'Podpora Ukrajiny jako ochrana Ceska.', legibilityModifier: 0.1, controversyModifier: -0.04, baseMobilizationModifier: 0.04, swingAppealModifier: 0.04, dimensionEffects: { ukraine: 0.08 } },
   { id: 'costControl', issueId: 'ukraineSupport', name: 'Kontrola nakladu', description: 'Podpora s durazem na transparentni naklady.', legibilityModifier: 0.04, controversyModifier: -0.1, baseMobilizationModifier: -0.02, swingAppealModifier: 0.08 },
-  { id: 'cheapEnergy', issueId: 'energyPrices', name: 'Levna energie', description: 'Doporuceni prioritizuje ceny pro domacnosti a firmy.', legibilityModifier: 0.1, controversyModifier: 0.02, baseMobilizationModifier: 0.06, swingAppealModifier: 0.04, dimensionEffects: { green_deal: -0.06 } },
+  { id: 'cheapEnergy', issueId: 'energyPrices', name: 'Levna energie', description: 'Doporuceni prioritizuje ceny pro domacnosti a firmy.', legibilityModifier: 0.1, controversyModifier: 0.02, baseMobilizationModifier: 0.06, swingAppealModifier: 0.04, dimensionEffects: { econ: -0.04 } },
   { id: 'cleanState', issueId: 'antiCorruption', name: 'Cisty stat', description: 'Drazsi duslednost v pravidlech a zakazkach.', legibilityModifier: 0.12, controversyModifier: -0.04, baseMobilizationModifier: 0.04, swingAppealModifier: 0.04 },
 ];
 
@@ -106,8 +119,11 @@ export const issueRelations: IssueRelation[] = [
   relation('sameSexAdoption', 'sameSexMarriage', 'usually_implies', 0.95, 0.9, 0.55, 'pro', 'pro', 'Podpora adopci skoro vzdy predpoklada podporu pravniho uznani paru.'),
   relation('genderQuotas', 'affirmativeAction', 'usually_implies', 0.82, 0.86, 0.48, 'pro', 'pro', 'Kvoty jsou konkretni forma vyrovnavacich opatreni.'),
   relation('greenDeal', 'coalPhaseout', 'same_family', 0.74, 0.74, 0.5, 'pro', 'pro', 'Zelena transformace a utlum uhli jsou ctene spolecne.'),
+  relation('greenDeal', 'euIntegration', 'usually_implies', 0.7, 0.72, 0.42, 'pro', 'pro', 'Podpora Green Dealu obvykle predpoklada alespon mirne proevropske ukotveni.'),
+  relation('greenDeal', 'nationalSovereignty', 'tension', 0.62, 0.62, 0.36, 'pro', 'pro', 'Silny Green Deal je v napeti s durazem na narodni suverenitu.'),
   relation('greenDeal', 'regulation', 'tension', 0.62, 0.62, 0.34, 'pro', 'against', 'Silny Green Deal se hure sklada s ostre antiregulacni linkou bez framingu.'),
   relation('greenDeal', 'taxes', 'tension', 0.52, 0.54, 0.3, 'pro', 'against', 'Ambiciozni transformace vyvolava otazku financovani.'),
+  relation('greenDeal', 'redistribution', 'splits_audience', 0.44, 0.42, 0.28, 'pro', 'pro', 'Klimaticka politika a socialni kompenzace mohou delit publika podle cen a duvery v instituce.'),
   relation('energyPrices', 'greenDeal', 'tension', 0.62, 0.58, 0.36, 'pro', 'pro', 'Levna energie a silny Green Deal vyzaduji jasny vyklad.'),
   relation('nuclearEnergy', 'energyPrices', 'same_family', 0.52, 0.58, 0.44, 'pro', 'pro', 'Jadro lze cist jako soucast stabilni energetiky.'),
   relation('coalPhaseout', 'energyPrices', 'tension', 0.58, 0.56, 0.34, 'pro', 'pro', 'Rychly utlum uhli zvysuje tlak na vysvetleni cen.'),
@@ -149,8 +165,8 @@ export const ideologicalFrames: IdeologicalFrame[] = [
   { id: 'conservativeRight', name: 'Konzervativni pravice', description: 'Trh, poradek a opatrne kulturni zmeny.', expectedIssues: { taxes: -1, regulation: -1, lawAndOrder: 1, nato: 1 }, tolerance: { sameSexMarriage: 1, euIntegration: 1 }, dimensionCenter: { econ: 0.45, culture: 0.25, authority: 0.35 } },
   { id: 'socialDemocratic', name: 'Socialni stat', description: 'Dostupne sluzby, duchody a regulace trhu.', expectedIssues: { redistribution: 1, pensions: 1, housing: 1, antiCorruption: 1 }, tolerance: { greenDeal: 1, euIntegration: 1 }, dimensionCenter: { econ: -0.55, establishment: 0.25 } },
   { id: 'nationalConservative', name: 'Narodne konzervativni smer', description: 'Suverenita, poradek a opatrnost k integraci.', expectedIssues: { nationalSovereignty: 1, migration: 1, lawAndOrder: 1, directDemocracy: 1 }, tolerance: { taxes: 1, pensions: 1 }, dimensionCenter: { culture: 0.55, authority: 0.55, globalism: -0.65 } },
-  { id: 'greenProgressive', name: 'Zeleny progresivismus', description: 'Klima, prava a evropska modernizace.', expectedIssues: { greenDeal: 1, coalPhaseout: 1, sameSexMarriage: 1, euIntegration: 1 }, tolerance: { nuclearEnergy: 1, taxes: 1 }, dimensionCenter: { culture: -0.55, green: 0.7, green_deal: 0.7 } },
-  { id: 'antiBureaucraticProtest', name: 'Proti byrokracii', description: 'Nizke regulace, kritika elit a levne energie.', expectedIssues: { regulation: -1, taxes: -1, greenDeal: -1, energyPrices: 1, directDemocracy: 1 }, tolerance: { nationalSovereignty: 1, lawAndOrder: 1 }, dimensionCenter: { econ: 0.35, establishment: -0.45, green_deal: -0.65 } },
+  { id: 'greenProgressive', name: 'Zeleny progresivismus', description: 'Klima, prava a evropska modernizace.', expectedIssues: { greenDeal: 1, coalPhaseout: 1, sameSexMarriage: 1, euIntegration: 1 }, tolerance: { nuclearEnergy: 1, taxes: 1 }, dimensionCenter: { culture: -0.55, green: 0.7, globalism: 0.5 } },
+  { id: 'antiBureaucraticProtest', name: 'Proti byrokracii', description: 'Nizke regulace, kritika elit a levne energie.', expectedIssues: { regulation: -1, taxes: -1, greenDeal: -1, energyPrices: 1, directDemocracy: 1 }, tolerance: { nationalSovereignty: 1, lawAndOrder: 1 }, dimensionCenter: { econ: 0.35, establishment: -0.45, globalism: -0.45 } },
 ];
 
 export const campaignPackages: CampaignPackage[] = [
@@ -180,12 +196,14 @@ export const mediaQuestions: MediaQuestion[] = [
     id: 'mq-green-costs',
     issueId: 'greenDeal',
     pressure: 0.72,
-    title: 'Naklady Green Dealu',
-    question: 'Jak chcete skloubit zelene cilove politiky s cenami energii a konkurenceschopnosti?',
+    title: 'Green Deal: prilezitost, nebo hrozba?',
+    question: 'Podle casti verejnosti Green Deal zdrazuje energie a ohrozuje prumysl. Podporuje ho vase strana?',
     answerOptions: [
-      { id: 'modernization', label: 'Modernizace prumyslu', description: 'Prezentovat transformaci jako investici.', framingId: 'modernization', positionDelta: 0.5, salienceDelta: 1, swingAppealModifier: 0.05 },
-      { id: 'security', label: 'Energeticka bezpecnost', description: 'Mluvit o nezavislosti a stabilnich cenach.', framingId: 'energySecurity', mediaVulnerabilityModifier: -0.04, swingAppealModifier: 0.04 },
-      { id: 'anti', label: 'Proti byrokracii', description: 'Zautocit na regulace a emisni naklady.', framingId: 'antiBureaucracy', positionDelta: -1, salienceDelta: 1, baseMobilizationModifier: 0.05 },
+      { id: 'climate', label: 'Nutna transformace', description: 'Je to nutna klimaticka transformace.', framingId: 'climateResponsibility', positionDelta: 1, salienceDelta: 1, mediaVulnerabilityModifier: 0.05, baseMobilizationModifier: 0.04 },
+      { id: 'modernization', label: 'Modernizace', description: 'Je to prilezitost pro modernizaci, pokud ji zvladneme chytre.', framingId: 'modernization', positionDelta: 0.5, salienceDelta: 1, swingAppealModifier: 0.05 },
+      { id: 'reform', label: 'Reformovat', description: 'Ekologii ano, soucasny Green Deal zasadne prepracovat.', framingId: 'reformNotReject', positionDelta: -0.5, salienceDelta: 1, mediaVulnerabilityModifier: -0.03, swingAppealModifier: 0.06 },
+      { id: 'bureaucracy', label: 'Draha regulace', description: 'Je to draha bruselska regulace.', framingId: 'expensiveBureaucracy', positionDelta: -1, salienceDelta: 1, baseMobilizationModifier: 0.05, mediaVulnerabilityModifier: 0.04 },
+      { id: 'industry', label: 'Hrozba pro prumysl', description: 'Ohrozuje prumysl a domacnosti.', framingId: 'industrialThreat', positionDelta: -1.5, salienceDelta: 1, baseMobilizationModifier: 0.06, mediaVulnerabilityModifier: 0.06 },
     ],
   },
   {
@@ -266,7 +284,15 @@ export const tripEvents: CampaignTripEvent[] = [
   { id: 'trip-energy-workers', title: 'Debata s prumyslovymi zamestnanci o energiich', description: 'Mistni lide tlaci na ceny energii a budoucnost prumyslu.', issueIds: ['energyPrices', 'greenDeal', 'coalPhaseout', 'euIntegration'], options: [
     { id: 'cheap', label: 'Levna energie a ochrana prumyslu', description: 'Zvednout ceny energii a brzdit zeleny tlak.', emphasizedIssues: ['energyPrices', 'nuclearEnergy'], deEmphasizedIssues: ['coalPhaseout'], salienceDeltas: { energyPrices: 1, nuclearEnergy: 1, coalPhaseout: -1 }, framingChanges: { energyPrices: 'cheapEnergy' }, localSupportModifier: 0.03 },
     { id: 'modern', label: 'Zelena modernizace a fondy', description: 'Spojit transformaci s investicemi.', emphasizedIssues: ['greenDeal', 'euIntegration'], salienceDeltas: { greenDeal: 1, euIntegration: 1 }, framingChanges: { greenDeal: 'modernization' }, swingAppealModifier: 0.02 },
-    { id: 'blame', label: 'Zautocit na byrokracii', description: 'Tvrdsi anti-Green Deal ramec.', emphasizedIssues: ['greenDeal', 'energyPrices'], salienceDeltas: { greenDeal: 1, energyPrices: 1 }, framingChanges: { greenDeal: 'antiBureaucracy' }, mediaRiskModifier: 0.05 },
+    { id: 'blame', label: 'Zautocit na byrokracii', description: 'Tvrdsi anti-Green Deal ramec.', emphasizedIssues: ['greenDeal', 'energyPrices'], salienceDeltas: { greenDeal: 1, energyPrices: 1 }, framingChanges: { greenDeal: 'expensiveBureaucracy' }, mediaRiskModifier: 0.05 },
+  ] },
+  { id: 'trip-urban-green-deal', title: 'Mestska debata o Green Dealu', description: 'Mestske liberalni publikum resi evropskou modernizaci, klima a bydleni.', issueIds: ['greenDeal', 'housing', 'euIntegration', 'coalPhaseout'], regionId: 'praha', options: [
+    { id: 'climate', label: 'Klimaticka odpovednost', description: 'Zvednout zelenou a proevropskou linku.', emphasizedIssues: ['greenDeal', 'euIntegration'], salienceDeltas: { greenDeal: 1, euIntegration: 1 }, framingChanges: { greenDeal: 'climateResponsibility' }, mediaRiskModifier: 0.03 },
+    { id: 'modern', label: 'Modernizace bez patosu', description: 'Mluvit o technologiich a dostupnosti energii.', emphasizedIssues: ['greenDeal', 'housing'], salienceDeltas: { greenDeal: 1, housing: 1 }, framingChanges: { greenDeal: 'modernization' }, swingAppealModifier: 0.03 },
+  ] },
+  { id: 'trip-rural-energy-prices', title: 'Vysocina: energie a domacnosti', description: 'Venkovske a starsi publikum resi ceny energii, duchody a dopady regulaci.', issueIds: ['greenDeal', 'energyPrices', 'pensions'], regionId: 'vysocina', options: [
+    { id: 'reform', label: 'Reformovat dopady', description: 'Uznat ekologii, ale tlacit socialni a cenove upravy.', emphasizedIssues: ['greenDeal', 'energyPrices'], salienceDeltas: { greenDeal: 1, energyPrices: 1 }, framingChanges: { greenDeal: 'reformNotReject' }, swingAppealModifier: 0.03 },
+    { id: 'prices', label: 'Ochrana domacnosti', description: 'Zvyraznit ceny energii a jistotu duchodu.', emphasizedIssues: ['energyPrices', 'pensions'], deEmphasizedIssues: ['greenDeal'], salienceDeltas: { energyPrices: 1, pensions: 1, greenDeal: -1 }, framingChanges: { greenDeal: 'industrialThreat' } },
   ] },
   { id: 'trip-housing-city', title: 'Setkani s najemniky ve meste', description: 'Hlavni tlak je na najmy a vystavbu.', issueIds: ['housing', 'regulation', 'redistribution'], options: [
     { id: 'build', label: 'Rychla vystavba', description: 'Akcentovat povoleni a obce.', emphasizedIssues: ['housing', 'regulation'], salienceDeltas: { housing: 1, regulation: -1 }, coherenceModifier: 0.02 },

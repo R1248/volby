@@ -221,6 +221,10 @@ export function matchesCampaignTarget(point: VoterPoint, target: CampaignEventTa
     if (!inRange(point.position[dimension], range)) return false;
   }
 
+  for (const [issueId, range] of Object.entries(target.issueAffinityFilter ?? {}) as [string, [number, number]][]) {
+    if (!inRange(point.issuePreferences?.[issueId] ?? 0, range)) return false;
+  }
+
   return true;
 }
 
@@ -245,6 +249,16 @@ export function calculateRegionalEffectStrength(point: VoterPoint, target: Campa
       const halfWidth = Math.max(0.1, (range[1] - range[0]) / 2);
       return sum + clamp(1 - Math.abs(point.position[dimension] - center) / halfWidth, 0, 1);
     }, 0) / latentFilters.length;
+    strength += closeness * 0.12;
+  }
+
+  const issueFilters = Object.entries(target.issueAffinityFilter ?? {}) as [string, [number, number]][];
+  if (issueFilters.length > 0) {
+    const closeness = issueFilters.reduce((sum, [issueId, range]) => {
+      const center = (range[0] + range[1]) / 2;
+      const halfWidth = Math.max(0.1, (range[1] - range[0]) / 2);
+      return sum + clamp(1 - Math.abs((point.issuePreferences?.[issueId] ?? 0) - center) / halfWidth, 0, 1);
+    }, 0) / issueFilters.length;
     strength += closeness * 0.12;
   }
 
@@ -318,8 +332,9 @@ export function normalizeNuts2(value?: string): Nuts2Id | undefined {
     : undefined;
 }
 
-function calculateLatentFit(position: LatentVector8D, hint?: Partial<Record<DimensionId, number>>) {
-  const entries = Object.entries(hint ?? {}) as [DimensionId, number][];
+function calculateLatentFit(position: LatentVector8D, hint?: KrajProfile['latentProfileHint']) {
+  const entries = (Object.entries(hint ?? {}) as [DimensionId | 'green_deal', number][])
+    .filter((entry): entry is [DimensionId, number] => entry[0] !== 'green_deal');
   if (entries.length === 0) {
     return 1;
   }

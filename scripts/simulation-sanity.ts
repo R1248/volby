@@ -36,7 +36,7 @@ for (const segment of Object.keys(means).sort()) {
   console.log(
     `${segment}: econ ${formatNumber(values.econ)}, culture ${formatNumber(values.culture)}, globalism ${formatNumber(
       values.globalism,
-    )}, ukraine ${formatNumber(values.ukraine)}, green_deal ${formatNumber(values.green_deal)}`,
+    )}, green ${formatNumber(values.green)}, ukraine ${formatNumber(values.ukraine)}`,
   );
 }
 

@@ -12,6 +12,7 @@ const domainLabels: Record<IssueDomain, string> = {
   authority: 'Rad a bezpeci',
   culture: 'Kultura',
   economy: 'Ekonomika',
+  energy: 'Energie',
   foreign_policy: 'Zahranici',
   green: 'Energie a klima',
   institutions: 'Instituce',
@@ -113,7 +114,7 @@ export default function ProgramScreen() {
               <ChoiceButton
                 isActive={selectedPosition.position === option.value}
                 key={option.value}
-                label={option.label}
+                label={selectedIssue.id === 'greenDeal' ? greenDealPositionLabel(option.value) : option.label}
                 onPress={() => updateProgramIssue(selectedIssue.id, { position: option.value })}
               />
             ))}
@@ -154,8 +155,8 @@ export default function ProgramScreen() {
             <Effect label="Culture" value={derivedLatent.culture ?? 0} />
             <Effect label="Authority" value={derivedLatent.authority ?? 0} />
             <Effect label="Globalism" value={derivedLatent.globalism ?? 0} />
+            <Effect label="Green" value={derivedLatent.green ?? 0} />
             <Effect label="Ukraine" value={derivedLatent.ukraine ?? 0} />
-            <Effect label="Green Deal" value={derivedLatent.green_deal ?? 0} />
           </View>
         </Card>
       </View>
@@ -299,6 +300,14 @@ function positionLabel(value: number) {
   if (value === 0) return '0';
   if (value === 1) return '+';
   return '++';
+}
+
+function greenDealPositionLabel(value: number) {
+  if (value <= -2) return 'Odmitnout jako ohrozeni';
+  if (value === -1) return 'Spise odmitnout';
+  if (value === 0) return 'Reformovat';
+  if (value === 1) return 'Spise podporit';
+  return 'Silne podporit';
 }
 
 function formatSigned(value: number) {
