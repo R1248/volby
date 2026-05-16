@@ -2,6 +2,7 @@ import { regions as displayRegions } from '../data/regions';
 import type { RegionId } from '../types/region';
 
 import { essRegionMixes, essVoterSegments } from './voterSpace.generated';
+import { campaignActionsV2 } from './campaignActionsV2';
 import { createIssueLayerState } from './issueSeed';
 import type {
   ActionType,
@@ -635,33 +636,38 @@ const initialRuntime = (party: PartySeed): PartyRuntime => {
   const salience8D = party.field.salience8D ?? defaultSalience8D();
 
   return {
-  cash: party.startingCash,
-  field: {
-    ...party.field,
-    center: { ...party.field.center },
-    center8D: { ...center8D },
-    latentCenter: { ...center8D },
-    originCenter: { ...party.field.originCenter },
-    originCenter8D: { ...(party.field.originCenter8D ?? center8D) },
-    salience8D: { ...salience8D },
-    width: { ...party.field.width },
-    width8D: { ...width8D },
-  },
-  graySpend: 0,
-  informationQuality: party.id === 'player' ? 0.42 : 0.32,
-  leader: {
-    energy: 1,
-    fatigue: 0,
-    officeRole: party.officeRole,
-    timeCap: party.weeklyStaffCap,
-    timeUsed: 0,
-  },
-  legalSpend: 0,
-  marketingAdvisorId: 'none',
-  organization: { ...party.organizationBase },
-  reputation: { ...party.reputation },
-  scandalRisk: party.reputation.controversy * 0.2,
-  thirdPartySpend: 0,
+    actionCooldowns: {},
+    cash: party.startingCash,
+    field: {
+      ...party.field,
+      center: { ...party.field.center },
+      center8D: { ...center8D },
+      latentCenter: { ...center8D },
+      originCenter: { ...party.field.originCenter },
+      originCenter8D: { ...(party.field.originCenter8D ?? center8D) },
+      salience8D: { ...salience8D },
+      width: { ...party.field.width },
+      width8D: { ...width8D },
+    },
+    graySpend: 0,
+    informationQuality: party.id === 'player' ? 0.42 : 0.32,
+    leader: {
+      energy: 1,
+      fatigue: 0,
+      officeRole: party.officeRole,
+      timeCap: party.weeklyStaffCap,
+      timeUsed: 0,
+    },
+    legalExposure: 0,
+    legalSpend: 0,
+    marketingAdvisorId: 'none',
+    mediaVulnerability: 0,
+    organization: { ...party.organizationBase },
+    reputation: { ...party.reputation },
+    scandalRisk: party.reputation.controversy * 0.2,
+    staffCap: party.weeklyStaffCap,
+    staffUsed: 0,
+    thirdPartySpend: 0,
   };
 };
 
@@ -670,6 +676,7 @@ export function createInitialGameState(): GameState {
 
   return {
     actions,
+    campaignActionsV2,
     coalitionRelations,
     events,
     grid: [],
@@ -695,7 +702,8 @@ export function createInitialGameState(): GameState {
     scandals: [],
     segments: voterSegments,
     sponsors,
-    version: '0.3-issue-layer',
+    turnoutModifiers: [],
+    version: '0.5-campaign-actions-v2',
     week: 4,
   };
 }
