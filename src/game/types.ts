@@ -1,4 +1,5 @@
 import type { RegionId } from '../types/region';
+import type { ActionAvailability, ActionPlacement } from './actions/actionTypes';
 import type { IssueLayerState, ProgramIssueId } from './issueTypes';
 
 export type Vec3 = {
@@ -36,23 +37,6 @@ export type PartyId = 'player' | 'civicFront' | 'greenFuture' | 'laborUnion' | '
 
 export type SegmentId = string;
 
-export type CampaignActionId =
-  | 'regionalRally'
-  | 'leaderVisit'
-  | 'onlineCampaign'
-  | 'policyPackage'
-  | 'internalPoll'
-  | 'focusGroup'
-  | 'messageTest'
-  | 'tvInterview'
-  | 'debate'
-  | 'schoolVisit'
-  | 'financeTransparency'
-  | 'negativeCampaign'
-  | 'parliamentSpeech'
-  | 'thirdPartySupport'
-  | 'opaqueSupport';
-
 export type GameMode = 'fullRealism';
 export type MarketingAdvisorId = 'none' | 'junior' | 'senior' | 'elite';
 export type OfficeRole = 'government' | 'opposition' | 'outsider';
@@ -61,7 +45,6 @@ export type GameRules = {
   donorCap: number;
   finalWeek: number;
   legalSpendCap: number;
-  maxActionsPerWeek: number;
   spendCap: number;
   thirdPartyCap: number;
   totalWeeks: number;
@@ -160,6 +143,7 @@ export type PartySeed = {
   reputation: ReputationVector;
   shortName: string;
   startingCash: number;
+  weeklyLeaderTimeCap?: number;
   weeklyStaffCap: number;
   winProfile: 'major' | 'mid' | 'small' | 'outsider';
 };
@@ -186,7 +170,9 @@ export type PartyRuntime = {
   legalExposure?: number;
   marketingAdvisorId: MarketingAdvisorId;
   mediaVulnerability?: number;
+  momentum?: number;
   organization: Partial<Record<RegionId, number>>;
+  parliamentAttendance?: number;
   reputation: ReputationVector;
   scandalRisk: number;
   staffCap?: number;
@@ -194,21 +180,8 @@ export type PartyRuntime = {
   thirdPartySpend: number;
 };
 
-export type ActionType = {
-  capacityCost: number;
-  category: 'Terén' | 'Online' | 'Média' | 'Program' | 'Analytika' | 'Finance';
-  cost: number;
-  description: string;
-  id: CampaignActionId;
-  leaderTimeCost: number;
-  name: string;
-  risk: 'nízké' | 'střední' | 'vyšší';
-  target: 'region' | 'national';
-};
-
 export type PlannedAction = {
-  actionId: CampaignActionId;
-  actionV2Id?: string;
+  actionV2Id: string;
   id: string;
   targetIssueId?: IssueId;
   targetPartyId?: PartyId;
@@ -219,6 +192,7 @@ export type PlannedAction = {
 
 export type CampaignActionCategory =
   | 'field'
+  | 'ads'
   | 'media'
   | 'digital'
   | 'program'
@@ -259,6 +233,8 @@ export type CampaignActionV2 = {
   description: string;
 
   category: CampaignActionCategory;
+  placement: ActionPlacement;
+  availability: ActionAvailability;
   legality: CampaignActionLegality;
   ethicalRisk: number;
 
@@ -326,26 +302,118 @@ export type CampaignTurnoutModifier = {
 
 export type MediaOutlet = {
   audienceMix: Partial<Record<SegmentId, number>>;
+  audienceByCluster?: Partial<Record<SegmentId, number>>;
   credibility: number;
+  controversy?: number;
+  description?: string;
   editorialVector: Vec3;
   id: string;
   kind: 'public_tv' | 'commercial_tv' | 'radio' | 'tabloid' | 'digital' | 'regional';
+  preferredFormats?: MediaFormat[];
   name: string;
   reach: number;
+  baseReach?: number;
+  regionIds?: RegionId[];
   regionFocus?: RegionId[];
+  regionScope?: 'national' | 'regional';
   scrutiny: number;
   sensationalism: number;
+  topicAffinity?: Partial<Record<ProgramIssueId, number>>;
+  trustByCluster?: Partial<Record<SegmentId, number>>;
+  type?: 'tv' | 'newspaper' | 'podcast' | 'influencer' | 'radio' | 'online' | 'expert';
 };
+
+export type MediaFormat =
+  | 'interview'
+  | 'debate'
+  | 'duel'
+  | 'podcast'
+  | 'regional'
+  | 'expertPanel'
+  | 'influencer'
+  | 'crisisInterview';
+
+export type SpeakerRole = 'leader' | 'expert' | 'regionalFigure' | 'controversialFigure' | 'newFace';
+
+export type MediaPreparationLevel = 'none' | 'basic' | 'strong';
+
+export type MediaMiniGameType =
+  | 'three_questions_timed'
+  | 'short_interview'
+  | 'long_form'
+  | 'informal_qna'
+  | 'hostile_interview';
 
 export type MediaInvitation = {
   id: string;
-  format: 'debate' | 'interview' | 'panel' | 'school' | 'press';
+  baseRisk?: number;
+  description?: string;
+  expectedReach?: number;
+  expiresInWeeks?: number;
+  format: MediaFormat | 'panel' | 'school' | 'press';
   issue: IssueId;
+  issueId?: ProgramIssueId;
+  miniGameType?: MediaMiniGameType | null;
+  opponentPartyId?: PartyId;
   outletId: string;
+  recommendedSpeakerRoles?: SpeakerRole[];
+  requiredPreparation?: number;
   resolved: boolean;
   response?: 'leader' | 'delegate' | 'decline' | 'ignore';
   risk: number;
+  title?: string;
   week: number;
+};
+
+export type VoterCluster = {
+  demographics: Record<string, string>;
+  id: SegmentId;
+  ideologyMean: LatentVector8D;
+  issueSensitivity: Partial<Record<ProgramIssueId, number>>;
+  mediaConsumption?: Partial<Record<string, number>>;
+  name: string;
+  regionDistribution?: Partial<Record<RegionId, number>>;
+  size: number;
+};
+
+export type MediaAppearanceDecision = {
+  invitationId: string;
+  action: 'decline' | 'accept';
+  miniGameResult?: {
+    performanceMultiplier: number;
+    successScore?: number;
+  };
+  preparationLevel: MediaPreparationLevel;
+  speakerRole?: SpeakerRole;
+};
+
+export type MediaClusterImpact = {
+  audienceShare: number;
+  clusterId: SegmentId;
+  controversyPenalty: number;
+  impact: number;
+  supportDelta: number;
+  topicRelevance: number;
+  trust: number;
+};
+
+export type MediaAppearanceResult = {
+  clusterImpacts: MediaClusterImpact[];
+  controversyTriggered: boolean;
+  invitationId: string;
+  issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
+  partyMomentumDelta: number;
+  reputationDelta?: Partial<ReputationVector>;
+  successScore: number;
+  summary: string;
+};
+
+export type MediaClusterModifier = {
+  amount: number;
+  clusterId: SegmentId;
+  expiresWeek: number;
+  sourceInvitationId: string;
+  weekApplied: number;
 };
 
 export type SponsorOffer = {
@@ -495,7 +563,6 @@ export type TurnBriefing = {
 };
 
 export type GameState = {
-  actions: ActionType[];
   campaignActionsV2: CampaignActionV2[];
   coalitionRelations: CoalitionRelation[];
   events: EventCard[];
@@ -503,6 +570,8 @@ export type GameState = {
   history: TurnBriefing[];
   issueLayer: IssueLayerState;
   media: MediaOutlet[];
+  mediaAppearanceResults?: MediaAppearanceResult[];
+  mediaClusterModifiers?: MediaClusterModifier[];
   mediaInvitations: MediaInvitation[];
   marketingAdvisors: MarketingAdvisor[];
   mode: GameMode;

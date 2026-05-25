@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
-import { campaignActionsV2, legacyCampaignActionV2ById } from '@/src/game/campaignActionsV2';
+import { mediaOutlets } from '@/src/data/mediaOutlets';
+import { campaignActionsV2 } from '@/src/game/campaignActionsV2';
 import {
   acceptSponsor,
   activateCampaignPackage as applyCampaignPackage,
@@ -11,6 +12,8 @@ import {
   hireMarketingAdvisor as applyMarketingAdvisor,
   initializeComputedState,
   publishPublicPoll as applyPublicPoll,
+  receiveMediaInvitations as applyReceiveMediaInvitations,
+  respondToMediaAppearance as applyMediaAppearanceDecision,
   respondToMediaInvitation as applyMediaInvitationResponse,
   resolveTurn,
   updateProgramIssue as applyProgramIssueUpdate,
@@ -19,7 +22,14 @@ import { createIssueLayerState } from '@/src/game/issueSeed';
 import type { PartyIssuePosition, ProgramIssueId } from '@/src/game/issueTypes';
 import { createInitialGameState, marketingAdvisors } from '@/src/game/seed';
 import { loadLatestGame, resetSave, saveGame, saveTurnSnapshot } from '@/src/game/storage';
-import type { CampaignActionId, GameState, MarketingAdvisorId, MediaInvitation, PartyId, PlannedAction } from '@/src/game/types';
+import type {
+  GameState,
+  MarketingAdvisorId,
+  MediaAppearanceDecision,
+  MediaInvitation,
+  PartyId,
+  PlannedAction,
+} from '@/src/game/types';
 import type { RegionId } from '@/src/types/region';
 
 type GameStore = {
@@ -30,15 +40,16 @@ type GameStore = {
   answerPendingQuestion: (questionId: string, optionId: string) => void;
   answerProgramMediaQuestion: (questionId: string, answerId: string) => void;
   publishPublicPoll: (pollsterId: string) => void;
+  receiveMediaInvitations: (invitations: MediaInvitation[]) => void;
   gameState: GameState;
   hireMarketingAdvisor: (advisorId: MarketingAdvisorId) => void;
   hydrateGame: () => Promise<void>;
   isHydrated: boolean;
   plannedActions: PlannedAction[];
-  planAction: (actionId: CampaignActionId, targetRegionId?: RegionId) => void;
-  planCampaignActionV2: (actionV2Id: string, targetRegionId?: RegionId) => void;
+  planCampaignActionV2: (actionV2Id: string, targetRegionId?: RegionId, targetProgramIssueId?: ProgramIssueId) => boolean;
   removePlannedAction: (plannedActionId: string) => void;
   resetGame: () => void;
+  respondToEarnedMediaInvitation: (decision: MediaAppearanceDecision) => void;
   respondToInvitation: (invitationId: string, response: NonNullable<MediaInvitation['response']>) => void;
   respondToMediaInvitation: (invitationId: string, response: NonNullable<MediaInvitation['response']>) => void;
   saveGameNow: () => Promise<void>;
@@ -54,6 +65,22 @@ type GameStore = {
 
 const initialState = initializeComputedState(createInitialGameState());
 
+function migrateStaffCap(staffCap?: number) {
+  if (staffCap === undefined) {
+    return 6;
+  }
+
+  if (staffCap <= 2) {
+    return 4.5;
+  }
+
+  if (staffCap <= 3) {
+    return 6;
+  }
+
+  return staffCap;
+}
+
 function asFullRealismState(state: GameState): GameState {
   const partyRuntime = Object.fromEntries(
     Object.entries(state.partyRuntime).map(([partyId, runtime]) => [
@@ -64,7 +91,9 @@ function asFullRealismState(state: GameState): GameState {
         legalExposure: runtime.legalExposure ?? 0,
         marketingAdvisorId: runtime.marketingAdvisorId ?? 'none',
         mediaVulnerability: runtime.mediaVulnerability ?? state.issueLayer?.player?.mediaVulnerability ?? 0,
-        staffCap: runtime.staffCap ?? state.rules?.maxActionsPerWeek ?? 3,
+        momentum: runtime.momentum ?? 0.5,
+        parliamentAttendance: runtime.parliamentAttendance,
+        staffCap: migrateStaffCap(runtime.staffCap),
         staffUsed: runtime.staffUsed ?? 0,
       },
     ]),
@@ -72,9 +101,12 @@ function asFullRealismState(state: GameState): GameState {
 
   return {
     ...state,
-    campaignActionsV2: state.campaignActionsV2 ?? campaignActionsV2,
+    campaignActionsV2,
     issueLayer: state.issueLayer ?? createIssueLayerState(),
     marketingAdvisors: state.marketingAdvisors ?? marketingAdvisors,
+    media: mediaOutlets,
+    mediaAppearanceResults: state.mediaAppearanceResults ?? [],
+    mediaClusterModifiers: state.mediaClusterModifiers ?? [],
     mode: 'fullRealism',
     partyRuntime,
     publicPollsterId: state.publicPollsterId ?? 'medianPlus',
@@ -115,9 +147,7 @@ function createGameWithSelectedParty(selectedPartyId: PartyId) {
 
 function plannedCost(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const action =
-      state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id) ??
-      state.actions.find((candidate) => candidate.id === plannedAction.actionId);
+    const action = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
     return sum + (action?.cost ?? 0);
   }, 0);
 }
@@ -125,18 +155,26 @@ function plannedCost(state: GameState, plannedActions: PlannedAction[]) {
 function plannedCapacity(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
     const actionV2 = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
-    const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
-    return sum + (actionV2?.staffCost ?? action?.capacityCost ?? 0);
+    return sum + (actionV2?.staffCost ?? 0);
   }, 0);
-}
-
-function legacyActionIdForActionV2(actionV2Id: string): CampaignActionId {
-  const legacyEntry = Object.entries(legacyCampaignActionV2ById).find(([, mappedId]) => mappedId === actionV2Id);
-  return (legacyEntry?.[0] as CampaignActionId | undefined) ?? 'regionalRally';
 }
 
 function persist(state: GameState, plannedActions: PlannedAction[] = []) {
   void saveGame(state, plannedActions);
+}
+
+function plannedLegalCost(state: GameState, plannedActions: PlannedAction[]) {
+  return plannedActions.reduce((sum, plannedAction) => {
+    const action = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
+    return sum + (action && action.legality !== 'illegal' ? action.cost : 0);
+  }, 0);
+}
+
+function plannedLeaderTime(state: GameState, plannedActions: PlannedAction[]) {
+  return plannedActions.reduce((sum, plannedAction) => {
+    const actionV2 = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
+    return sum + (actionV2?.leaderTimeCost ?? 0);
+  }, 0);
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -175,6 +213,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },
+  receiveMediaInvitations: (invitations) => {
+    const nextState = applyReceiveMediaInvitations(get().gameState, invitations);
+    set({ gameState: nextState });
+    persist(nextState, get().plannedActions);
+  },
   gameState: initialState,
   hireMarketingAdvisor: (advisorId) => {
     const nextState = applyMarketingAdvisor(get().gameState, advisorId);
@@ -198,76 +241,52 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   isHydrated: false,
   plannedActions: [],
-  planAction: (actionId, targetRegionId) => {
-    const { gameState, plannedActions } = get();
-    const action = gameState.actions.find((item) => item.id === actionId);
-    const runtime = gameState.partyRuntime.player;
-
-    if (!action || plannedActions.length >= gameState.rules.maxActionsPerWeek) {
-      return;
-    }
-
-    if (runtime.cash < plannedCost(gameState, plannedActions) + action.cost) {
-      return;
-    }
-
-    if (runtime.legalSpend + plannedCost(gameState, plannedActions) + action.cost > gameState.rules.legalSpendCap) {
-      return;
-    }
-
-    if (plannedCapacity(gameState, plannedActions) + action.capacityCost > gameState.rules.maxActionsPerWeek) {
-      return;
-    }
-
-    const nextPlannedActions = [
-      ...plannedActions,
-      {
-        actionId,
-        id: `${actionId}-${targetRegionId ?? 'national'}-${gameState.week}-${plannedActions.length}`,
-        targetRegionId,
-      },
-    ];
-
-    set({ plannedActions: nextPlannedActions });
-    persist(gameState, nextPlannedActions);
-  },
-  planCampaignActionV2: (actionV2Id, targetRegionId) => {
+  planCampaignActionV2: (actionV2Id, targetRegionId, targetProgramIssueId) => {
     const { gameState, plannedActions } = get();
     const action = gameState.campaignActionsV2.find((item) => item.id === actionV2Id);
     const runtime = gameState.partyRuntime.player;
 
-    if (!action || plannedActions.length >= gameState.rules.maxActionsPerWeek) {
-      return;
+    if (!action) {
+      return false;
     }
 
     if (runtime.cash < plannedCost(gameState, plannedActions) + action.cost) {
-      return;
+      return false;
     }
 
-    if (action.legality !== 'illegal' && runtime.legalSpend + plannedCost(gameState, plannedActions) + action.cost > gameState.rules.legalSpendCap) {
-      return;
+    if (action.legality !== 'illegal' && runtime.legalSpend + plannedLegalCost(gameState, plannedActions) + action.cost > gameState.rules.legalSpendCap) {
+      return false;
     }
 
-    if (plannedCapacity(gameState, plannedActions) + action.staffCost > (runtime.staffCap ?? gameState.rules.maxActionsPerWeek)) {
-      return;
+    if (runtime.legalSpend + runtime.graySpend + runtime.thirdPartySpend + plannedCost(gameState, plannedActions) + action.cost > gameState.rules.spendCap) {
+      return false;
+    }
+
+    if ((runtime.staffUsed ?? 0) + plannedCapacity(gameState, plannedActions) + action.staffCost > (runtime.staffCap ?? 6)) {
+      return false;
+    }
+
+    if (runtime.leader.timeUsed + plannedLeaderTime(gameState, plannedActions) + action.leaderTimeCost > runtime.leader.timeCap) {
+      return false;
     }
 
     if (action.target.scope === 'region' && !targetRegionId) {
-      return;
+      return false;
     }
 
     const nextPlannedActions = [
       ...plannedActions,
       {
-        actionId: legacyActionIdForActionV2(actionV2Id),
         actionV2Id,
         id: `${actionV2Id}-${targetRegionId ?? 'national'}-${gameState.week}-${plannedActions.length}`,
+        targetProgramIssueId: action.target.scope === 'issue' ? targetProgramIssueId : undefined,
         targetRegionId,
       },
     ];
 
     set({ plannedActions: nextPlannedActions });
     persist(gameState, nextPlannedActions);
+    return true;
   },
   removePlannedAction: (plannedActionId) => {
     const nextPlannedActions = get().plannedActions.filter((item) => item.id !== plannedActionId);
@@ -279,6 +298,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     set({ gameState: nextState, plannedActions: [], selectedRegionId: 'praha' });
     void resetSave().then(() => saveGame(nextState, []));
+  },
+  respondToEarnedMediaInvitation: (decision) => {
+    const nextState = applyMediaAppearanceDecision(get().gameState, decision);
+    set({ gameState: nextState });
+    persist(nextState, get().plannedActions);
   },
   respondToInvitation: (invitationId, response) => {
     const nextState = applyMediaInvitationResponse(get().gameState, invitationId, response);

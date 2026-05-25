@@ -69,7 +69,7 @@ export default function LeaderScreen() {
           <SectionTitle>Poradce štábu</SectionTitle>
           <Text style={styles.note}>
             {runtime.leader.fatigue > 0.55
-              ? 'Lídr je přetížený. Tento týden zvaž analytiku, terénní organizaci nebo delegování médií.'
+              ? 'Lídr je přetížený. Tento týden zvaž terénní organizaci nebo delegování médií.'
               : 'Lídr má prostor pro viditelnou akci. Debata, TV rozhovor nebo výjezd mohou dobře navázat na hlavní téma týdne.'}
           </Text>
         </Card>

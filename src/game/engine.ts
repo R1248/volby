@@ -4,6 +4,9 @@ import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/region
 import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
 import { createIssueLayerState } from './issueSeed';
+import { generateWeeklyMediaInvitations, resolveMediaAppearance } from './mediaEngine';
+import { voterClusters } from '../data/mediaOutlets';
+import { deriveParliamentAttendancePressure } from './programMandateCatalog';
 import {
   activateCampaignPackage as activateCampaignPackageInLayer,
   answerCampaignTrip as answerCampaignTripInLayer,
@@ -17,7 +20,6 @@ import {
 } from './issueEngine';
 import type { PartyIssuePosition, ProgramIssueId } from './issueTypes';
 import type {
-  CampaignActionId,
   ElectionResult,
   EventCard,
   GameState,
@@ -25,6 +27,8 @@ import type {
   LatentDimension8D,
   LatentVector8D,
   MarketingAdvisorId,
+  MediaAppearanceDecision,
+  MediaAppearanceResult,
   MediaInvitation,
   PartyId,
   PlannedAction,
@@ -60,7 +64,11 @@ export function initializeComputedState(state: GameState): GameState {
 }
 
 export function generateWeeklyContext(state: GameState, rngSeed = state.rngSeed) {
-  const nextState = cloneState(state);
+  let nextState = cloneState(state);
+  const generatedWeeklyMedia = generateWeeklyMediaInvitations(nextState, rngSeed);
+  if (generatedWeeklyMedia.length > 0) {
+    nextState = receiveMediaInvitations(nextState, generatedWeeklyMedia);
+  }
   const generatedEvents = nextState.events.filter((event) => event.week === state.week);
   const generatedInvitations = nextState.mediaInvitations.filter((invitation) => invitation.week === state.week);
   const contextNotes = [
@@ -104,14 +112,14 @@ export function resolveTurn(state: GameState, plannedActions: PlannedAction[], r
   nextState.mediaInvitations = context.state.mediaInvitations;
   nextState.scandals = context.state.scandals;
 
-  resetLeaderWeek(nextState);
   applyMarketingAdvisorCost(nextState, riskNotes);
   applyMediaInvitations(nextState, mediaNotes, riskNotes);
 
-  for (const plannedAction of plannedActions.slice(0, nextState.rules.maxActionsPerWeek)) {
+  for (const plannedAction of plannedActions) {
     applyAction(nextState, plannedAction, actionEffects, riskNotes);
   }
 
+  applyParliamentAttendance(nextState, riskNotes);
   applyUnansweredQuestions(nextState, riskNotes);
   applyEvents(nextState, context.events, actionEffects, riskNotes);
   applyOpponentMoves(nextState, rngSeed, opponentMoves, riskNotes);
@@ -119,6 +127,11 @@ export function resolveTurn(state: GameState, plannedActions: PlannedAction[], r
 
   nextState.week = Math.min(nextState.rules.finalWeek, beforeState.week + 1);
   nextState.rngSeed = nextSeed(rngSeed);
+  resetLeaderWeek(nextState);
+  const nextWeekInvitations = generateWeeklyMediaInvitations(nextState, nextState.rngSeed);
+  if (nextWeekInvitations.length > 0) {
+    nextState.mediaInvitations = receiveMediaInvitations(nextState, nextWeekInvitations).mediaInvitations;
+  }
   nextState.regionalSupport = computeRegionalSupport(nextState);
   nextState.nationalSupport = computeNationalSupport(nextState, nextState.regionalSupport);
   nextState.polls = computePolls(nextState, nextState.nationalSupport).partySupportEstimate ?? nextState.polls;
@@ -149,66 +162,15 @@ function hasComputedSupport(state: GameState) {
 }
 
 export function previewActionImpact(state: GameState, plannedAction: PlannedAction) {
-  const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
   const actionV2Preview = previewCampaignActionV2(state, plannedAction);
-  const advisor = currentMarketingAdvisor(state);
-  const delta = estimateActionPreviewDelta(state, plannedAction);
-  const uncertainty = Math.max(
-    0.002,
-    0.011 - state.partyRuntime.player.informationQuality * 0.004 - advisor.predictionAccuracyBonus * 0.03,
-  );
-  const low = delta - uncertainty;
-  const high = delta + uncertainty;
 
   return {
-    delta,
-    label:
-      actionV2Preview && advisor.level >= 2
-        ? `${actionV2Preview.action.name}: ${actionV2Preview.label}`
-        : actionV2Preview
-        ? `${actionV2Preview.action.name}: ${actionV2Preview.action.preview.shortEffectLabel ?? 'strukturovany dopad'}`
-        : advisor.level >= 2
-        ? `${action?.name ?? 'Akce'}: odhad ${formatSignedPoints(low)} až ${formatSignedPoints(high)} b.`
-        : `${action?.name ?? 'Akce'}: hrubý odhad ${formatSignedPoints(delta)} b.`,
-    risk: action?.risk ?? 'nízké',
+    delta: 0,
+    label: actionV2Preview
+      ? `${actionV2Preview.action.name}: ${actionV2Preview.label}`
+      : 'Kampanova akce nema dostupny nahled.',
+    risk: actionV2Preview?.risk ?? 'nizke riziko',
   };
-}
-
-function estimateActionPreviewDelta(state: GameState, plannedAction: PlannedAction) {
-  const action = state.actions.find((candidate) => candidate.id === plannedAction.actionId);
-  if (!action) {
-    return 0;
-  }
-
-  const baseByAction: Record<CampaignActionId, number> = {
-    debate: 0.006,
-    financeTransparency: 0.0015,
-    focusGroup: 0.001,
-    internalPoll: 0,
-    leaderVisit: 0.0035,
-    messageTest: 0.0015,
-    negativeCampaign: 0.0025,
-    onlineCampaign: 0.003,
-    opaqueSupport: 0.005,
-    parliamentSpeech: 0.003,
-    policyPackage: 0.0035,
-    regionalRally: 0.003,
-    schoolVisit: 0.002,
-    thirdPartySupport: 0.003,
-    tvInterview: 0.004,
-  };
-  const advisor = currentMarketingAdvisor(state);
-  const currentSupport = state.nationalSupport.player ?? 0.12;
-  const saturation = clamp(1 - currentSupport * 0.6, 0.55, 1);
-  const quality = 0.85 + state.partyRuntime.player.informationQuality * 0.15 + advisor.predictionAccuracyBonus * 0.4;
-  const regionalScale = action.target === 'region' ? 0.42 : 1;
-  const regionOrganization =
-    plannedAction.targetRegionId && action.target === 'region'
-      ? 0.9 + (state.partyRuntime.player.organization[plannedAction.targetRegionId] ?? 0.25) * 0.25
-      : 1;
-  const riskPenalty = action.risk === 'vyšší' ? 0.75 : action.risk === 'střední' ? 0.9 : 1;
-
-  return (baseByAction[plannedAction.actionId] ?? 0.002) * saturation * quality * regionalScale * regionOrganization * riskPenalty;
 }
 
 export function computeRegionalSupport(state: GameState): GameState['regionalSupport'] {
@@ -461,33 +423,137 @@ export function respondToMediaInvitation(
   invitationId: string,
   response: MediaInvitation['response'],
 ): GameState {
+  const preparationLevel = response === 'leader' || response === 'delegate' ? 'basic' : 'none';
+  const speakerRole = response === 'leader' ? 'leader' : response === 'delegate' ? 'expert' : undefined;
+  return respondToMediaAppearance(state, {
+    action: response === 'decline' || response === 'ignore' ? 'decline' : 'accept',
+    invitationId,
+    preparationLevel,
+    speakerRole,
+  });
+}
+
+export function receiveMediaInvitations(state: GameState, invitations: MediaInvitation[]): GameState {
   const nextState = cloneState(state);
-  const invitation = nextState.mediaInvitations.find((item) => item.id === invitationId);
+  const existingIds = new Set(nextState.mediaInvitations.map((invitation) => invitation.id));
+  nextState.mediaInvitations = [
+    ...nextState.mediaInvitations,
+    ...invitations.filter((invitation) => !existingIds.has(invitation.id)),
+  ];
+  return nextState;
+}
+
+export function respondToMediaAppearance(state: GameState, decision: MediaAppearanceDecision): GameState {
+  const nextState = cloneState(state);
+  const invitation = nextState.mediaInvitations.find((item) => item.id === decision.invitationId);
   const runtime = nextState.partyRuntime.player;
 
-  if (!invitation || !response) {
+  if (!invitation) {
     return state;
   }
 
+  const response = decision.action === 'decline' ? 'decline' : decision.speakerRole === 'leader' ? 'leader' : 'delegate';
   invitation.response = response;
   invitation.resolved = true;
+  const result = resolveMediaAppearance(decision, nextState);
+  applyMediaAppearanceResult(nextState, result);
+  applyMediaAppearanceCosts(nextState, decision, invitation);
 
-  if (response === 'leader') {
-    runtime.leader.timeUsed = clamp(runtime.leader.timeUsed + 0.45, 0, runtime.leader.timeCap + 1);
-    runtime.leader.fatigue = clamp(runtime.leader.fatigue + invitation.risk * 0.25, 0, 1);
-    runtime.field.amplitude = clamp(runtime.field.amplitude + 0.025, 0.35, 1.8);
-  }
-
-  if (response === 'delegate') {
-    runtime.field.amplitude = clamp(runtime.field.amplitude + 0.01, 0.35, 1.8);
-    runtime.reputation.competence = clamp(runtime.reputation.competence + 0.01, 0, 1);
-  }
-
-  if (response === 'decline' || response === 'ignore') {
-    runtime.reputation.trust = clamp(runtime.reputation.trust - (response === 'ignore' ? 0.025 : 0.012), 0, 1);
-  }
+  runtime.field.amplitude = clamp(runtime.field.amplitude + result.partyMomentumDelta * 0.8, 0.35, 1.8);
+  runtime.momentum = clamp((runtime.momentum ?? 0.5) + result.partyMomentumDelta, 0, 1);
 
   return initializeComputedState(nextState);
+}
+
+function applyMediaAppearanceCosts(state: GameState, decision: MediaAppearanceDecision, invitation: MediaInvitation) {
+  const runtime = state.partyRuntime.player;
+  const preparationCost = decision.preparationLevel === 'strong' ? 0.35 : decision.preparationLevel === 'basic' ? 0.18 : 0.05;
+  const speakerTime =
+    decision.action === 'decline'
+      ? 0.03
+      : decision.speakerRole === 'leader'
+      ? 0.38
+      : decision.speakerRole === 'regionalFigure'
+      ? 0.14
+      : 0.22;
+  const fatigue =
+    decision.action === 'decline'
+      ? 0.01
+      : (invitation.baseRisk ?? invitation.risk) * (decision.speakerRole === 'leader' ? 0.16 : 0.08) + preparationCost * 0.08;
+
+  runtime.staffUsed = clamp((runtime.staffUsed ?? 0) + preparationCost, 0, runtime.staffCap ?? 6);
+  runtime.leader.timeUsed = clamp(runtime.leader.timeUsed + (decision.speakerRole === 'leader' ? speakerTime : 0.04), 0, runtime.leader.timeCap + 1);
+  runtime.leader.fatigue = clamp(runtime.leader.fatigue + fatigue, 0, 1);
+}
+
+function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceResult) {
+  const runtime = state.partyRuntime.player;
+  state.mediaAppearanceResults = [result, ...(state.mediaAppearanceResults ?? [])].slice(0, 20);
+  state.mediaClusterModifiers = [
+    ...result.clusterImpacts
+      .filter((impact) => Math.abs(impact.supportDelta) > 0.0004)
+      .map((impact) => ({
+        amount: impact.supportDelta,
+        clusterId: impact.clusterId,
+        expiresWeek: state.week + 3,
+        sourceInvitationId: result.invitationId,
+        weekApplied: state.week,
+      })),
+    ...(state.mediaClusterModifiers ?? []).filter((modifier) => modifier.expiresWeek >= state.week),
+  ].slice(0, 60);
+
+  applyReputationDelta(runtime.reputation, result.reputationDelta);
+  applyMediaIssueSalience(state, result.issueSalienceDelta);
+
+  if (result.controversyTriggered) {
+    runtime.mediaVulnerability = clamp((runtime.mediaVulnerability ?? 0) + 0.035, 0, 1);
+    runtime.scandalRisk = clamp(runtime.scandalRisk + 0.025, 0, 1);
+    state.scandals.push({
+      evidence: 0.2,
+      id: `media-controversy-${state.week}-${result.invitationId}`,
+      legalExposure: 0.03,
+      resolved: false,
+      sourceOutletId: state.mediaInvitations.find((invitation) => invitation.id === result.invitationId)?.outletId,
+      targetPartyId: 'player',
+      title: 'Dozvuky kontroverzniho medialniho vystoupeni',
+      traceability: 0.64,
+      truthStatus: 'mixed',
+      severity: 0.22,
+      virality: 0.42,
+    });
+  }
+}
+
+function applyReputationDelta(reputation: ReputationVector, delta?: Partial<ReputationVector>) {
+  for (const [key, amount] of Object.entries(delta ?? {}) as [keyof ReputationVector, number][]) {
+    reputation[key] = clamp(reputation[key] + amount, 0, 1);
+  }
+}
+
+function applyMediaIssueSalience(state: GameState, issueSalienceDelta: MediaAppearanceResult['issueSalienceDelta']) {
+  ensureIssueLayer(state);
+  const currentIssuePositions = { ...state.issueLayer.player.currentIssuePositions };
+
+  for (const [issueId, delta] of Object.entries(issueSalienceDelta)) {
+    const current = currentIssuePositions[issueId];
+    if (!current) continue;
+    currentIssuePositions[issueId] = {
+      ...current,
+      salience: Math.round(clamp(current.salience + (delta ?? 0) * 4, 0, 4)),
+    };
+  }
+
+  state.issueLayer = recalculateIssueLayer(
+    {
+      ...state.issueLayer,
+      player: {
+        ...state.issueLayer.player,
+        currentIssuePositions,
+      },
+    },
+    state.partyRuntime.player.field.flexibility,
+  );
+  applyIssueLayerToPlayer(state);
 }
 
 export function computePolls(state: GameState, support: Record<PartyId, number>): PollResult {
@@ -721,6 +787,7 @@ function computeParticleUtilityForContext(
   const organization = runtime.organization[region.id] ?? 0.25;
   const fatiguePenalty = partyId === 'player' ? runtime.leader.fatigue * 0.08 : 0;
   const programModifier = issueLayerUtilityModifier(state.issueLayer, compactPointToSegment(point), partyId === 'player');
+  const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
   const scandalPenalty = state.scandals
     .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
     .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -731,9 +798,59 @@ function computeParticleUtilityForContext(
     organization * 0.42 -
     programModifier -
     fatiguePenalty -
-    scandalPenalty;
+    scandalPenalty +
+    mediaClusterModifier;
 
   return Math.max(0.001, Math.exp(logUtility));
+}
+
+function mediaClusterUtilityModifier(state: GameState, point: CompactRegionalVoterPoint) {
+  const modifiers = (state.mediaClusterModifiers ?? []).filter((modifier) => modifier.expiresWeek >= state.week);
+  if (modifiers.length === 0) {
+    return 0;
+  }
+
+  return modifiers.reduce((sum, modifier) => {
+    const cluster = voterClusters.find((item) => item.id === modifier.clusterId);
+    if (!cluster) {
+      return sum;
+    }
+    return sum + modifier.amount * clusterAffinity(point, cluster) * 4;
+  }, 0);
+}
+
+function clusterAffinity(point: CompactRegionalVoterPoint, cluster: (typeof voterClusters)[number]) {
+  const ideologyDistance =
+    Math.abs(point.position.econ - cluster.ideologyMean.econ) +
+    Math.abs(point.position.culture - cluster.ideologyMean.culture) +
+    Math.abs(point.position.authority - cluster.ideologyMean.authority) +
+    Math.abs(point.position.establishment - cluster.ideologyMean.establishment) +
+    Math.abs(point.position.globalism - cluster.ideologyMean.globalism) +
+    Math.abs(point.position.green - cluster.ideologyMean.green) +
+    Math.abs(point.position.ukraine - cluster.ideologyMean.ukraine);
+  const ideologyAffinity = clamp(1 - ideologyDistance / 7, 0, 1);
+  const ageAffinity = demographicAffinity(point.ageGroup, cluster.demographics.age);
+  const educationAffinity = demographicAffinity(point.education, cluster.demographics.education);
+  const settlementAffinity = demographicAffinity(point.urbanity, cluster.demographics.settlement);
+
+  return clamp(ideologyAffinity * 0.58 + ageAffinity * 0.14 + educationAffinity * 0.12 + settlementAffinity * 0.16, 0, 1);
+}
+
+function demographicAffinity(value: string | undefined, target: string | undefined) {
+  if (!value || !target || target === 'mixed') return 0.55;
+  if (target === 'large_city') return value === 'metro' || value === 'large_town' ? 1 : 0.2;
+  if (target === 'small_town') return value === 'town' || value === 'large_town' ? 1 : 0.25;
+  if (target === 'rural') return value === 'rural' ? 1 : 0.25;
+  if (target === 'high') return value === 'tertiary' ? 1 : 0.35;
+  if (target === 'medium') return value === 'secondary' ? 1 : 0.55;
+  if (target === 'low_medium') return value === 'lower' || value === 'secondary' ? 0.9 : 0.35;
+  if (target === 'medium_high') return value === 'secondary' || value === 'tertiary' ? 0.9 : 0.35;
+  if (target === '18-29') return value === '15_24' || value === '25_39' ? 0.9 : 0.2;
+  if (target === '30-49') return value === '25_39' || value === '40_54' ? 0.85 : 0.3;
+  if (target === '30-59') return value === '25_39' || value === '40_54' || value === '55_plus' ? 0.75 : 0.3;
+  if (target === '30-69') return value === '25_39' || value === '40_54' || value === '55_plus' ? 0.75 : 0.3;
+  if (target === '45+' || target === '60+') return value === '55_plus' || value === '40_54' ? 0.85 : 0.25;
+  return value === target ? 1 : 0.45;
 }
 
 function compactPointToSegment(point: CompactRegionalVoterPoint): VoterSegment {
@@ -833,347 +950,7 @@ function applyAction(state: GameState, plannedAction: PlannedAction, actionEffec
     return;
   }
 
-  const action = state.actions.find((item) => item.id === plannedAction.actionId);
-  const runtime = state.partyRuntime.player;
-
-  if (!action) {
-    return;
-  }
-
-  if (runtime.cash < action.cost || runtime.legalSpend + action.cost > state.rules.legalSpendCap) {
-    riskNotes.push(`${action.name} nebyla provedena: rozpočet nebo legal spend limit nestačí.`);
-    return;
-  }
-
-  if (runtime.leader.timeUsed + action.leaderTimeCost > runtime.leader.timeCap) {
-    riskNotes.push(`${action.name} přetížila předsedkyni a zvýšila riziko slabého výkonu.`);
-    runtime.leader.fatigue = clamp(runtime.leader.fatigue + 0.08, 0, 1);
-  }
-
-  runtime.cash = round(runtime.cash - action.cost);
-  runtime.legalSpend = round(runtime.legalSpend + action.cost);
-  runtime.leader.timeUsed = clamp(runtime.leader.timeUsed + action.leaderTimeCost, 0, runtime.leader.timeCap + 1);
-
-  switch (plannedAction.actionId) {
-    case 'regionalRally':
-      increaseRegionOrganization(state, plannedAction.targetRegionId, 0.1);
-      runtime.field.width.culture = clamp(runtime.field.width.culture + 0.015, 0.25, 1.4);
-      widenField8D(runtime.field, 'culture', 0.015);
-      runtime.reputation.authenticity = clamp(runtime.reputation.authenticity + 0.025, 0, 1);
-      actionEffects.push('Regionální mítink posílil lokální organizaci a autenticitu kampaně.');
-      break;
-    case 'leaderVisit':
-      increaseRegionOrganization(state, plannedAction.targetRegionId, 0.08);
-      runtime.leader.fatigue = clamp(runtime.leader.fatigue + 0.16, 0, 1);
-      runtime.reputation.trust = clamp(runtime.reputation.trust + 0.025, 0, 1);
-      actionEffects.push('Výjezd předsedy zvedl důvěru v cílovém regionu, ale přidal únavu lídra.');
-      break;
-    case 'onlineCampaign':
-      runtime.field.amplitude = clamp(runtime.field.amplitude + 0.035, 0.4, 1.8);
-      runtime.reputation.controversy = clamp(runtime.reputation.controversy + 0.01, 0, 1);
-      increaseRegionOrganization(state, plannedAction.targetRegionId, 0.035);
-      actionEffects.push('Online kampaň zvýšila dosah u volatilních segmentů.');
-      break;
-    case 'policyPackage':
-      runtime.reputation.competence = clamp(runtime.reputation.competence + 0.035, 0, 1);
-      runtime.reputation.consistency = clamp(runtime.reputation.consistency + 0.018, 0, 1);
-      runtime.field.width.econ = clamp(runtime.field.width.econ + 0.02, 0.25, 1.4);
-      widenField8D(runtime.field, 'econ', 0.02);
-      adjustPlayerIssueOwnership(state, plannedAction.targetIssueId ?? 'housing', 0.04);
-      actionEffects.push('Programový balíček posílil kompetenci a issue ownership.');
-      break;
-    case 'internalPoll':
-      runtime.informationQuality = clamp(runtime.informationQuality + 0.16, 0, 1);
-      actionEffects.push('Interní průzkum zpřesnil odhady, ale nepřidal podporu přímo.');
-      break;
-    case 'focusGroup':
-      runtime.informationQuality = clamp(runtime.informationQuality + 0.1, 0, 1);
-      runtime.reputation.consistency = clamp(runtime.reputation.consistency + 0.01, 0, 1);
-      actionEffects.push('Focus group odhalila bariéry a jazyk cílových voličů bez přímého nárůstu podpory.');
-      break;
-    case 'messageTest':
-      runtime.informationQuality = clamp(runtime.informationQuality + currentMarketingAdvisor(state).messageTestingBonus + 0.11, 0, 1);
-      runtime.reputation.controversy = clamp(runtime.reputation.controversy - 0.01, 0, 1);
-      actionEffects.push('Test sdělení zpřesnil predikci dopadů kampaně a snížil riziko špatného rámování.');
-      break;
-    case 'tvInterview':
-      runtime.field.amplitude = clamp(runtime.field.amplitude + 0.025, 0.4, 1.8);
-      runtime.reputation.competence = clamp(runtime.reputation.competence + 0.015, 0, 1);
-      runtime.leader.fatigue = clamp(runtime.leader.fatigue + 0.08, 0, 1);
-      actionEffects.push('TV rozhovor zvýšil celostátní viditelnost.');
-      break;
-    case 'debate':
-      runtime.field.amplitude = clamp(runtime.field.amplitude + 0.045, 0.4, 1.8);
-      runtime.reputation.competence = clamp(runtime.reputation.competence + 0.02 - runtime.leader.fatigue * 0.02, 0, 1);
-      runtime.leader.fatigue = clamp(runtime.leader.fatigue + 0.12, 0, 1);
-      actionEffects.push('Debata přinesla vysokou viditelnost a zvýšila tlak na lídra.');
-      break;
-    case 'schoolVisit':
-      runtime.field.width.authority = clamp(runtime.field.width.authority + 0.02, 0.25, 1.4);
-      widenField8D(runtime.field, 'authority', 0.02);
-      runtime.reputation.authenticity = clamp(runtime.reputation.authenticity + 0.02, 0, 1);
-      actionEffects.push('Návštěva školy rozšířila zásah mezi mladší a vzdělanější segmenty.');
-      break;
-    case 'parliamentSpeech':
-      runtime.reputation.competence = clamp(runtime.reputation.competence + 0.03, 0, 1);
-      runtime.reputation.trust = clamp(runtime.reputation.trust + 0.015, 0, 1);
-      actionEffects.push('Sněmovní projev posílil institucionální respekt a kompetenci.');
-      break;
-    case 'financeTransparency':
-      runtime.reputation.integrity = clamp(runtime.reputation.integrity + 0.07, 0, 1);
-      runtime.reputation.controversy = clamp(runtime.reputation.controversy - 0.035, 0, 1);
-      runtime.scandalRisk = clamp(runtime.scandalRisk - 0.08, 0, 1);
-      actionEffects.push('Transparentnost financí snížila reputační a sponzorské riziko.');
-      break;
-    case 'negativeCampaign':
-      runtime.reputation.controversy = clamp(runtime.reputation.controversy + 0.06, 0, 1);
-      runtime.reputation.authenticity = clamp(runtime.reputation.authenticity - 0.02, 0, 1);
-      state.partyRuntime.civicFront.reputation.trust = clamp(state.partyRuntime.civicFront.reputation.trust - 0.035, 0, 1);
-      increaseRecentConflict(state, 'player', 'civicFront', 0.12);
-      actionEffects.push('Negativní kampaň oslabila hlavního soupeře, ale zhoršila tón kampaně.');
-      break;
-    case 'thirdPartySupport':
-      if (runtime.thirdPartySpend + 0.6 > state.rules.thirdPartyCap) {
-        riskNotes.push('Třetí osoba narazila na limit podpůrné kampaně.');
-        return;
-      }
-      runtime.thirdPartySpend = round(runtime.thirdPartySpend + 0.6);
-      runtime.field.amplitude = clamp(runtime.field.amplitude + 0.025, 0.4, 1.8);
-      runtime.reputation.controversy = clamp(runtime.reputation.controversy + 0.02, 0, 1);
-      actionEffects.push('Registrovaná třetí osoba zesílila sdělení, ale snížila kontrolu nad kampaní.');
-      break;
-    case 'opaqueSupport':
-      runtime.graySpend = round(runtime.graySpend + 1.4);
-      runtime.field.amplitude = clamp(runtime.field.amplitude + 0.05, 0.4, 1.8);
-      runtime.reputation.integrity = clamp(runtime.reputation.integrity - 0.09, 0, 1);
-      runtime.scandalRisk = clamp(runtime.scandalRisk + 0.18, 0, 1);
-      actionEffects.push('Neprůhledná podpora krátkodobě zesílila kampaň, ale výrazně zvýšila právní riziko.');
-      break;
-  }
-
-  applyCampaignActionToIssueLayer(state, plannedAction, action, actionEffects);
-}
-
-function applyCampaignActionToIssueLayer(
-  state: GameState,
-  plannedAction: PlannedAction,
-  action: GameState['actions'][number],
-  actionEffects: string[],
-) {
-  ensureIssueLayer(state);
-
-  const runtime = state.partyRuntime.player;
-  let nextLayer = state.issueLayer;
-  let mediaShift = 0;
-  let legibilityShift = 0;
-  let coreShift = 0;
-  let swingShift = 0;
-  let feedbackTitle = action.name;
-  let feedbackMessage = 'Kampanovy tah se propsal do programove vrstvy a pres ni do 8D prostoru volicu.';
-
-  if (plannedAction.actionId === 'internalPoll') {
-    return;
-  }
-
-  switch (plannedAction.actionId) {
-    case 'regionalRally':
-    case 'leaderVisit': {
-      const trip = selectTripForCampaign(state, plannedAction.targetRegionId);
-      nextLayer = {
-        ...nextLayer,
-        pendingCampaignTripId: trip?.id ?? nextLayer.pendingCampaignTripId,
-      };
-      for (const issueId of trip?.issueIds.slice(0, 2) ?? ['housing', 'energyPrices']) {
-        nextLayer = patchIssueInLayer(nextLayer, issueId, { salienceDelta: 1 });
-      }
-      coreShift += 0.02;
-      feedbackMessage = 'Vyjezd zvedl lokalni tlak na konkretni temata. Stab je musi udrzet citelna i celostatne.';
-      break;
-    }
-    case 'onlineCampaign':
-      for (const issueId of topSalienceIssues(nextLayer, 2)) {
-        nextLayer = patchIssueInLayer(nextLayer, issueId, { salienceDelta: 1 });
-      }
-      mediaShift += nextLayer.player.coherenceBreakdown.coherenceScore < 55 ? 0.04 : 0.015;
-      coreShift += 0.02;
-      feedbackMessage = 'Online kampan zesilila nejviditelnejsi temata; necitelny program pritom rychleji generuje medialni riziko.';
-      break;
-    case 'policyPackage': {
-      const packageId = packageForLegacyIssue(plannedAction.targetIssueId);
-      nextLayer = activateCampaignPackageInLayer(nextLayer, packageId, runtime.field.flexibility);
-      feedbackTitle = nextLayer.campaignPackages.find((pack) => pack.id === packageId)?.name ?? action.name;
-      feedbackMessage = 'Programovy balicek zvedl salienci souvisejicich temat a snizuje agenda chaos, pokud je balicek vnitrne citelny.';
-      break;
-    }
-    case 'focusGroup':
-      nextLayer = improveFramingForTopIssue(nextLayer);
-      legibilityShift += 0.04;
-      mediaShift -= 0.025;
-      feedbackMessage = 'Focus group zlepsila jazyk hlavniho tematu a snizila riziko spatneho ramovani.';
-      break;
-    case 'messageTest':
-      nextLayer = improveFramingForTopIssue(nextLayer);
-      legibilityShift += 0.05;
-      mediaShift -= 0.035;
-      swingShift += 0.015;
-      feedbackMessage = 'Test sdeleni zlepsil citelnost a mirne zvysil presvedcovaci efekt u mene pevnych volicu.';
-      break;
-    case 'tvInterview':
-      nextLayer = {
-        ...nextLayer,
-        pendingMediaQuestionId: nextPendingItemId(nextLayer.mediaQuestions, nextLayer.pendingMediaQuestionId),
-      };
-      mediaShift += 0.025;
-      legibilityShift += 0.015;
-      feedbackMessage = 'Televizni vystup zvysil dosah programu, ale take pravdepodobnost tlaku na slaba mista.';
-      break;
-    case 'debate':
-      mediaShift += 0.035;
-      coreShift += nextLayer.player.coherenceBreakdown.coherenceScore > 65 ? 0.025 : 0;
-      feedbackMessage = 'Debata vytahla nejviditelnejsi rozpory. Koherentni program pomaha, necitelny dava souperum utocnou plochu.';
-      break;
-    case 'schoolVisit':
-      nextLayer = patchIssueInLayer(nextLayer, 'sameSexMarriage', { salienceDelta: 1, framingId: 'noCultureWar' });
-      nextLayer = patchIssueInLayer(nextLayer, 'cannabis', { salienceDelta: 1 });
-      swingShift += 0.015;
-      feedbackMessage = 'Skolni navsteva zvedla kulturne liberalni temata a jejich dopad na mladsi segmenty.';
-      break;
-    case 'parliamentSpeech':
-      nextLayer = patchIssueInLayer(nextLayer, 'antiCorruption', { salienceDelta: 1, framingId: 'cleanState' });
-      nextLayer = patchIssueInLayer(nextLayer, 'civilServiceReform', { salienceDelta: 1 });
-      legibilityShift += 0.025;
-      feedbackMessage = 'Snemovni projev posilil institucionalni a kompetencni linku programu.';
-      break;
-    case 'negativeCampaign':
-      mediaShift += 0.06;
-      legibilityShift -= 0.02;
-      swingShift -= 0.02;
-      feedbackMessage = 'Negativni kampan meni pozornost k souperum, ale zhorsuje citelnost vlastniho programu.';
-      break;
-    case 'thirdPartySupport':
-    case 'opaqueSupport':
-      mediaShift += plannedAction.actionId === 'opaqueSupport' ? 0.07 : 0.03;
-      coreShift += 0.015;
-      feedbackMessage = 'Externi zesileni zvysilo dosah sdeleni, ale snizilo kontrolu nad tim, jak bude program cten.';
-      break;
-  }
-
-  nextLayer = recalculateIssueLayer(nextLayer, runtime.field.flexibility);
-  nextLayer = {
-    ...nextLayer,
-    feedbackLog: [
-      {
-        id: `campaign-${state.week}-${plannedAction.id}`,
-        message: feedbackMessage,
-        metrics: {
-          coherence: nextLayer.player.coherenceBreakdown.coherenceScore,
-          core: nextLayer.player.coreLoyalty,
-          legibility: nextLayer.player.programLegibility,
-          media: nextLayer.player.mediaVulnerability,
-          swing: nextLayer.player.swingAppeal,
-        },
-        title: feedbackTitle,
-        week: state.week,
-      },
-      ...nextLayer.feedbackLog,
-    ].slice(0, 8),
-    player: {
-      ...nextLayer.player,
-      coreLoyalty: clamp(nextLayer.player.coreLoyalty + coreShift, 0, 1),
-      mediaVulnerability: clamp(nextLayer.player.mediaVulnerability + mediaShift, 0, 1),
-      programLegibility: clamp(nextLayer.player.programLegibility + legibilityShift, 0, 1),
-      swingAppeal: clamp(nextLayer.player.swingAppeal + swingShift, 0, 1),
-    },
-  };
-
-  state.issueLayer = nextLayer;
-  applyIssueLayerToPlayer(state);
-  pushUnique(actionEffects, 'Programova vrstva upravila 8D fit strany vuci volicskemu prostoru.');
-}
-
-function patchIssueInLayer(
-  layer: GameState['issueLayer'],
-  issueId: ProgramIssueId,
-  patch: { framingId?: string; positionDelta?: number; salienceDelta?: number },
-): GameState['issueLayer'] {
-  const current = layer.player.currentIssuePositions[issueId];
-  if (!current) {
-    return layer;
-  }
-
-  return {
-    ...layer,
-    player: {
-      ...layer.player,
-      currentIssuePositions: {
-        ...layer.player.currentIssuePositions,
-        [issueId]: {
-          ...current,
-          framingId: patch.framingId ?? current.framingId,
-          position: clamp(current.position + (patch.positionDelta ?? 0), -2, 2),
-          salience: Math.round(clamp(current.salience + (patch.salienceDelta ?? 0), 0, 4)),
-        },
-      },
-    },
-  };
-}
-
-function topSalienceIssues(layer: GameState['issueLayer'], count: number) {
-  return Object.values(layer.player.currentIssuePositions)
-    .sort((a, b) => b.salience - a.salience || b.rigidity - a.rigidity)
-    .slice(0, count)
-    .map((position) => position.issueId);
-}
-
-function improveFramingForTopIssue(layer: GameState['issueLayer']) {
-  const issueId = topSalienceIssues(layer, 1)[0];
-  const framing = layer.framings.find((candidate) => candidate.issueId === issueId);
-
-  return framing ? patchIssueInLayer(layer, issueId, { framingId: framing.id }) : layer;
-}
-
-function packageForLegacyIssue(issueId?: IssueId) {
-  switch (issueId) {
-    case 'climate':
-    case 'industry':
-    case 'transport':
-      return 'secureAffordableEnergy';
-    case 'education':
-      return 'modernLiberalState';
-    case 'healthcare':
-    case 'housing':
-      return 'fairLivingStandards';
-    case 'security':
-      return 'sovereignSafeCountry';
-    case 'taxes':
-      return 'freedomWithoutBureaucracy';
-    default:
-      return 'fairLivingStandards';
-  }
-}
-
-function selectTripForCampaign(state: GameState, regionId?: RegionId) {
-  const layer = state.issueLayer;
-  if (regionId === 'moravskoslezsky' || regionId === 'ustecky') {
-    return layer.tripEvents.find((trip) => trip.id === 'trip-energy-workers');
-  }
-  if (regionId === 'praha' || regionId === 'jihomoravsky') {
-    return layer.tripEvents.find((trip) => trip.id === 'trip-housing-city');
-  }
-  if (regionId === 'karlovarsky' || regionId === 'plzensky') {
-    return layer.tripEvents.find((trip) => trip.id === 'trip-border-security');
-  }
-
-  return layer.tripEvents.find((trip) => trip.id === layer.pendingCampaignTripId) ?? layer.tripEvents[0];
-}
-
-function nextPendingItemId<T extends { id: string }>(items: readonly T[], currentId?: string) {
-  if (items.length === 0) {
-    return undefined;
-  }
-
-  const currentIndex = currentId ? items.findIndex((item) => item.id === currentId) : -1;
-  return items[(currentIndex + 1 + items.length) % items.length]?.id;
+  riskNotes.push('Puvodni typ kampanove akce uz neni podporovan; pouzij V2 plan kampane.');
 }
 
 function applyMediaInvitations(state: GameState, mediaNotes: string[], riskNotes: string[]) {
@@ -1554,23 +1331,6 @@ function currentMarketingAdvisor(state: GameState) {
   );
 }
 
-function increaseRegionOrganization(state: GameState, regionId: PlannedAction['targetRegionId'], amount: number) {
-  if (!regionId) {
-    return;
-  }
-
-  const current = state.partyRuntime.player.organization[regionId] ?? 0.25;
-  state.partyRuntime.player.organization[regionId] = clamp(current + amount, 0, 1);
-}
-
-function adjustPlayerIssueOwnership(state: GameState, issueId: keyof GameState['parties'][number]['issueOwnership'], amount: number) {
-  const player = state.parties.find((party) => party.id === 'player');
-  if (!player) {
-    return;
-  }
-  player.issueOwnership[issueId] = clamp((player.issueOwnership[issueId] ?? 0) + amount, 0, 1);
-}
-
 function increaseRecentConflict(state: GameState, partyA: PartyId, partyB: PartyId, amount: number) {
   const relation = findRelation(state, partyA, partyB);
   if (!relation) {
@@ -1636,6 +1396,36 @@ function inferPartyCenter8D(party: GameState['parties'][number], fieldRuntime: G
     green: clamp(latent?.green ?? -climate * 0.72 - transport * 0.12 - industry * 0.08, -1, 1),
     ukraine: clamp(latent?.ukraine ?? -field.authority * 0.3 - field.culture * 0.16 + security * 0.28 + party.reputation.consistency * 0.12 - 0.06, -1, 1),
   });
+}
+
+function applyParliamentAttendance(state: GameState, riskNotes: string[]) {
+  const party = state.parties.find((candidate) => candidate.id === state.playerPartyId);
+  const runtime = state.partyRuntime.player;
+
+  if (!party || party.officeRole === 'outsider') {
+    runtime.parliamentAttendance = undefined;
+    return;
+  }
+
+  const leaderCapacity = Math.max(runtime.leader.timeCap, 0.001);
+  const staffCapacity = Math.max(runtime.staffCap ?? 6, 0.001);
+  const availableLeaderHours = Math.max(0, 1 - runtime.leader.timeUsed / leaderCapacity) * 40;
+  const availableStaffHours = Math.max(0, 1 - (runtime.staffUsed ?? 0) / staffCapacity) * 40;
+  const pressure = deriveParliamentAttendancePressure(availableLeaderHours, availableStaffHours);
+  const attendance = clamp(1 - pressure, 0, 1);
+
+  runtime.parliamentAttendance = attendance;
+
+  if (attendance < 0.35) {
+    runtime.reputation.competence = clamp(runtime.reputation.competence - 0.015, 0, 1);
+    runtime.reputation.consistency = clamp(runtime.reputation.consistency - 0.01, 0, 1);
+    riskNotes.push('Kampan vycerpala cas pro Snemovnu; nizka pritomnost ubrala institucionalni duveryhodnost.');
+    return;
+  }
+
+  if (attendance < 0.6) {
+    riskNotes.push('Nabity kampanovy tyden omezil pritomnost ve Snemovne.');
+  }
 }
 
 function legacyFieldCenter8D(field: GameState['partyRuntime'][PartyId]['field']): LatentVector8D {
@@ -1709,12 +1499,6 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function pushUnique(items: string[], item: string) {
-  if (!items.includes(item)) {
-    items.push(item);
-  }
-}
-
 function nextSeed(seed: number) {
   return (seed * 1664525 + 1013904223) % 4294967296;
 }
@@ -1726,10 +1510,6 @@ function randomFromSeed(seed: number) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100;
-}
-
-function formatSignedPoints(value: number) {
-  return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}`;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -1745,6 +1525,3 @@ export function segmentShareInRegion(state: GameState, regionId: string, segment
   return region?.segmentMix[segmentId] ?? 0;
 }
 
-export function actionById(state: GameState, actionId: CampaignActionId) {
-  return state.actions.find((action) => action.id === actionId);
-}

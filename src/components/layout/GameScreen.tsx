@@ -10,29 +10,32 @@ type GameScreenProps = {
   children: ReactNode;
   subtitle?: string;
   title: string;
+  titleInStatusStrip?: boolean;
 };
 
-export function GameScreen({ activeItem, children, subtitle, title }: GameScreenProps) {
+export function GameScreen({ activeItem, children, subtitle, title, titleInStatusStrip = false }: GameScreenProps) {
   return (
     <View style={styles.screen}>
       <Sidebar activeItem={activeItem} />
 
       <View style={styles.workspace}>
-        <StatusStrip />
+        <StatusStrip pageTitle={titleInStatusStrip ? title : undefined} />
         <View style={styles.surface}>
-          <View style={styles.titleRow}>
-            <View style={styles.titleAccent} />
-            <View style={styles.titleCopy}>
-              <Text style={styles.title} numberOfLines={1}>
-                {title}
-              </Text>
-              {subtitle ? (
-                <Text style={styles.subtitle} numberOfLines={2}>
-                  {subtitle}
+          {!titleInStatusStrip ? (
+            <View style={styles.titleRow}>
+              <View style={styles.titleAccent} />
+              <View style={styles.titleCopy}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {title}
                 </Text>
-              ) : null}
+                {subtitle ? (
+                  <Text style={styles.subtitle} numberOfLines={2}>
+                    {subtitle}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-          </View>
+          ) : null}
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>

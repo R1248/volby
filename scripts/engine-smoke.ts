@@ -74,9 +74,9 @@ const supportiveSupport = computeNationalSupport(greenDealSupportive, computeReg
 assert(Math.abs(opposedSupport - supportiveSupport) > 0.0001, 'Green Deal issue position must affect support through issue fit');
 
 const plannedActions: PlannedAction[] = [
-  { actionId: 'regionalRally', id: 'smoke-rally', targetRegionId: 'moravskoslezsky' },
-  { actionId: 'internalPoll', id: 'smoke-poll', targetRegionId: 'ustecky' },
-  { actionId: 'tvInterview', id: 'smoke-tv' },
+  { actionV2Id: 'regionalMeeting', id: 'smoke-rally', targetRegionId: 'moravskoslezsky' },
+  { actionV2Id: 'onlineAdCampaign', id: 'smoke-online' },
+  { actionV2Id: 'videoClipCampaign', id: 'smoke-video' },
 ];
 
 const turnA = resolveTurn(baseState, plannedActions, 42);
@@ -91,19 +91,13 @@ const cappedState = {
   ...baseState,
   rules: { ...baseState.rules, legalSpendCap: baseState.partyRuntime.player.legalSpend },
 };
-const cappedResult = resolveTurn(cappedState, [{ actionId: 'tvInterview', id: 'blocked-tv' }], 7);
+const cappedResult = resolveTurn(cappedState, [{ actionV2Id: 'videoClipCampaign', id: 'blocked-video' }], 7);
 assert(cappedResult.briefing.riskNotes.some((note) => note.includes('legal spend')), 'Legal spend cap should block invalid action');
 
 const sponsorBefore = baseState.partyRuntime.player;
 const sponsorAfter = acceptSponsor(baseState, 'opaque').partyRuntime.player;
 assert(sponsorAfter.reputation.integrity < sponsorBefore.reputation.integrity, 'Risky sponsor should lower integrity');
 assert(sponsorAfter.scandalRisk > sponsorBefore.scandalRisk, 'Risky sponsor should raise scandal risk');
-
-const pollBefore = baseState.polls.player.high - baseState.polls.player.low;
-const pollAfterState = resolveTurn(baseState, [{ actionId: 'internalPoll', id: 'poll-only', targetRegionId: 'praha' }], 11).state;
-const pollAfter = pollAfterState.polls.player.high - pollAfterState.polls.player.low;
-assert(pollAfter < pollBefore, 'Internal poll should narrow poll interval');
-assert(Math.abs(pollAfterState.nationalSupport.player - baseState.nationalSupport.player) < 0.02, 'Internal poll must not directly boost support');
 
 const question = baseState.questions[0];
 const worstOption = question.options.reduce((worst, option) => (option.controversyRisk > worst.controversyRisk ? option : worst), question.options[0]);

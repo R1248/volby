@@ -23,7 +23,7 @@ export default function BriefingScreen() {
         <Metric label="Průzkum" value={formatPercent(gameState.nationalSupport.player)} />
         <Metric
           label="Plánované akce"
-          value={`${plannedActions.length}/${gameState.rules.maxActionsPerWeek}`}
+          value={`${plannedActions.length}`}
           tone={plannedActions.length > 0 ? 'warn' : undefined}
         />
         <Metric
@@ -42,7 +42,6 @@ export default function BriefingScreen() {
             </Text>
           </View>
           <ActionButton
-            disabled={plannedActions.length === 0}
             label="Odehrát týden"
             onPress={resolvePlannedWeek}
             tone="accent"

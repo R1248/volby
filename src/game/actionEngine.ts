@@ -1,10 +1,11 @@
-import { campaignActionsV2, legacyCampaignActionV2ById } from './campaignActionsV2';
+import { campaignActionsV2 } from './campaignActionsV2';
 import {
   applyIdeologicalInertia,
   deriveLatentFromIssues,
   recalculateIssueLayer,
 } from './issueEngine';
 import { createIssueLayerState } from './issueSeed';
+import type { CampaignPhase } from './actions/actionTypes';
 import type { ProgramIssueId } from './issueTypes';
 import type {
   CampaignActionV2,
@@ -27,8 +28,45 @@ export type CampaignActionV2Result = {
 };
 
 export function resolveCampaignActionV2(state: GameState, plannedAction: PlannedAction) {
-  const actionId = plannedAction.actionV2Id ?? legacyCampaignActionV2ById[plannedAction.actionId];
-  return (state.campaignActionsV2 ?? campaignActionsV2).find((action) => action.id === actionId);
+  return (state.campaignActionsV2 ?? campaignActionsV2).find((action) => action.id === plannedAction.actionV2Id);
+}
+
+export function getCampaignPhase(currentWeek: number, finalWeek: number): CampaignPhase {
+  if (currentWeek >= finalWeek) return 'election_day';
+  const weeksToElection = finalWeek - currentWeek;
+  if (weeksToElection <= 1) return 'final';
+  if (weeksToElection <= 4) return 'late';
+  if (currentWeek / finalWeek < 0.45) return 'early';
+  return 'mid';
+}
+
+export function getCampaignTimingMultipliers(actionId: string, currentWeek: number, finalWeek: number) {
+  const phase = getCampaignPhase(currentWeek, finalWeek);
+  const isLate = phase === 'late' || phase === 'final' || phase === 'election_day';
+  const isFinal = phase === 'final' || phase === 'election_day';
+  const isOutdoor = actionId === 'billboardCampaign' || actionId === 'citylightCampaign';
+  const isLeak = actionId === 'fabricatedScandal' || actionId === 'falseAccusation' || actionId === 'kompromatLeak';
+
+  return {
+    awareness: isOutdoor ? (phase === 'early' ? 1.1 : phase === 'mid' ? 1 : 0.72) : 1,
+    persuasion: isLeak && isLate ? 1.22 : 1,
+    risk: isLeak && isLate ? 1.28 : 1,
+    turnout:
+      actionId === 'gotvOperation'
+        ? isFinal
+          ? 1.45
+          : isLate
+            ? 1.18
+            : 0.62
+        : actionId === 'leaderMobilizationAppeal'
+          ? isFinal
+            ? 1.35
+            : isLate
+              ? 1.16
+              : 0.78
+          : 1,
+    phase,
+  };
 }
 
 export function previewCampaignActionV2(state: GameState, plannedAction: PlannedAction) {
@@ -80,7 +118,7 @@ export function applyCampaignActionV2(state: GameState, plannedAction: PlannedAc
   } else {
     runtime.legalSpend = round(runtime.legalSpend + action.cost);
   }
-  runtime.staffUsed = clamp((runtime.staffUsed ?? 0) + action.staffCost, 0, runtime.staffCap ?? state.rules.maxActionsPerWeek);
+  runtime.staffUsed = clamp((runtime.staffUsed ?? 0) + action.staffCost, 0, runtime.staffCap ?? 6);
   runtime.leader.timeUsed = clamp(runtime.leader.timeUsed + action.leaderTimeCost, 0, runtime.leader.timeCap + 1);
   runtime.leader.fatigue = clamp(
     runtime.leader.fatigue + action.fatigueCost + action.ethicalRisk * 0.04 + action.risks.scandal * 0.03,
@@ -95,24 +133,26 @@ export function applyCampaignActionV2(state: GameState, plannedAction: PlannedAc
     };
   }
 
-  applyFieldEffects(state, action);
-  applyIssueEffects(state, action);
-  runtime.informationQuality = clamp(runtime.informationQuality + (action.effects.informationQualityShift ?? 0), 0, 1);
-  applyReputationEffects(runtime.reputation, action.effects.reputationShift);
-  applyOrganizationEffects(state, plannedAction, action);
-  applyCoalitionEffects(state, plannedAction, action);
-  applyRiskEffects(state, plannedAction, action);
-  applyTurnoutPreparation(state, action);
+  const resolvedAction = applyCampaignTiming(state, action);
 
-  const summary = summarizeAction(action);
+  applyFieldEffects(state, resolvedAction);
+  applyIssueEffects(state, plannedAction, resolvedAction);
+  runtime.informationQuality = clamp(runtime.informationQuality + (resolvedAction.effects.informationQualityShift ?? 0), 0, 1);
+  applyReputationEffects(runtime.reputation, resolvedAction.effects.reputationShift);
+  applyOrganizationEffects(state, plannedAction, resolvedAction);
+  applyCoalitionEffects(state, plannedAction, resolvedAction);
+  applyRiskEffects(state, plannedAction, resolvedAction);
+  applyTurnoutPreparation(state, resolvedAction);
+
+  const summary = summarizeAction(resolvedAction);
   actionEffects.push(summary);
-  if (action.legality !== 'clean') {
+  if (resolvedAction.legality !== 'clean') {
     riskNotes.push(
-      `${action.name}: ${action.legality === 'illegal' ? 'ilegalni abstraktni mechanika' : 'seda zona'} zvysila expozici, backlash a koalicni toxicitu.`,
+      `${resolvedAction.name}: ${resolvedAction.legality === 'illegal' ? 'ilegalni abstraktni mechanika' : 'seda zona'} zvysila expozici, backlash a koalicni toxicitu.`,
     );
   }
 
-  addActionFeedback(state, action);
+  addActionFeedback(state, resolvedAction);
   return { action, actionEffects, handled: true, ok: true, riskNotes };
 }
 
@@ -133,11 +173,11 @@ function validateCampaignActionV2(state: GameState, action: CampaignActionV2, pl
     return { ok: false, reason: 'celkovy spend cap by byl prekrocen' };
   }
 
-  if ((runtime.staffUsed ?? 0) + action.staffCost > (runtime.staffCap ?? state.rules.maxActionsPerWeek)) {
+  if ((runtime.staffUsed ?? 0) + action.staffCost > (runtime.staffCap ?? 6)) {
     return { ok: false, reason: 'stabni kapacita nestaci' };
   }
 
-  if (runtime.leader.timeUsed + action.leaderTimeCost > runtime.leader.timeCap + 0.35) {
+  if (runtime.leader.timeUsed + action.leaderTimeCost > runtime.leader.timeCap) {
     return { ok: false, reason: 'cas lidra nestaci' };
   }
 
@@ -151,6 +191,48 @@ function validateCampaignActionV2(state: GameState, action: CampaignActionV2, pl
   }
 
   return { ok: true };
+}
+
+function applyCampaignTiming(state: GameState, action: CampaignActionV2): CampaignActionV2 {
+  const timing = getCampaignTimingMultipliers(action.id, state.week, state.rules.finalWeek);
+  if (timing.awareness === 1 && timing.persuasion === 1 && timing.turnout === 1 && timing.risk === 1) {
+    return action;
+  }
+
+  return {
+    ...action,
+    effects: {
+      ...action.effects,
+      counterMobilizationRiskShift: scaleOptional(action.effects.counterMobilizationRiskShift, timing.risk),
+      demobilizationModifier: action.effects.demobilizationModifier
+        ? {
+            ...action.effects.demobilizationModifier,
+            amount: round(action.effects.demobilizationModifier.amount * timing.persuasion),
+          }
+        : undefined,
+      fieldAmplitude: scaleOptional(action.effects.fieldAmplitude, Math.max(timing.awareness, timing.persuasion)),
+      legalExposureShift: scaleOptional(action.effects.legalExposureShift, timing.risk),
+      mediaVulnerabilityShift: scaleOptional(action.effects.mediaVulnerabilityShift, timing.risk),
+      scandalRiskShift: scaleOptional(action.effects.scandalRiskShift, timing.risk),
+      turnoutModifier: action.effects.turnoutModifier
+        ? {
+            ...action.effects.turnoutModifier,
+            amount: round(action.effects.turnoutModifier.amount * timing.turnout),
+          }
+        : undefined,
+    },
+    preview: {
+      ...action.preview,
+      shortEffectLabel: `${action.preview.shortEffectLabel ?? action.name}; faze ${timing.phase}`,
+    },
+    risks: {
+      ...action.risks,
+      backlash: clamp(action.risks.backlash * timing.risk, 0, 1),
+      legal: clamp(action.risks.legal * timing.risk, 0, 1),
+      media: clamp(action.risks.media * timing.risk, 0, 1),
+      scandal: clamp(action.risks.scandal * timing.risk, 0, 1),
+    },
+  };
 }
 
 function applyFieldEffects(state: GameState, action: CampaignActionV2) {
@@ -184,7 +266,7 @@ function applyFieldEffects(state: GameState, action: CampaignActionV2) {
   field.latentCenter = field.center8D;
 }
 
-function applyIssueEffects(state: GameState, action: CampaignActionV2) {
+function applyIssueEffects(state: GameState, plannedAction: PlannedAction, action: CampaignActionV2) {
   if (
     !action.effects.issuePositionShift &&
     !action.effects.issueSalienceShift &&
@@ -197,19 +279,23 @@ function applyIssueEffects(state: GameState, action: CampaignActionV2) {
   const runtime = state.partyRuntime.player;
   const currentPositions = { ...state.issueLayer.player.currentIssuePositions };
 
-  for (const issueId of affectedIssues(action)) {
+  const issuePositionShift = resolveIssueRecord(action.effects.issuePositionShift, plannedAction);
+  const issueSalienceShift = resolveIssueRecord(action.effects.issueSalienceShift, plannedAction);
+  const framingChange = resolveIssueRecord(action.effects.framingChange, plannedAction);
+
+  for (const issueId of affectedIssues(issuePositionShift, issueSalienceShift, framingChange)) {
     const current = currentPositions[issueId];
     if (!current) {
       continue;
     }
 
-    const requestedFraming = action.effects.framingChange?.[issueId];
+    const requestedFraming = framingChange?.[issueId];
     const framingExists = requestedFraming && state.issueLayer.framings.some((framing) => framing.id === requestedFraming && framing.issueId === issueId);
     currentPositions[issueId] = {
       ...current,
       framingId: framingExists ? requestedFraming : current.framingId,
-      position: clamp(current.position + (action.effects.issuePositionShift?.[issueId] ?? 0), -2, 2),
-      salience: Math.round(clamp(current.salience + (action.effects.issueSalienceShift?.[issueId] ?? 0), 0, 4)),
+      position: clamp(current.position + (issuePositionShift?.[issueId] ?? 0), -2, 2),
+      salience: Math.round(clamp(current.salience + (issueSalienceShift?.[issueId] ?? 0), 0, 4)),
     };
   }
 
@@ -417,14 +503,29 @@ function addActionFeedback(state: GameState, action: CampaignActionV2) {
   ].slice(0, 8);
 }
 
-function affectedIssues(action: CampaignActionV2): ProgramIssueId[] {
+function affectedIssues(
+  issuePositionShift?: Partial<Record<ProgramIssueId, number>>,
+  issueSalienceShift?: Partial<Record<ProgramIssueId, number>>,
+  framingChange?: Partial<Record<ProgramIssueId, string>>,
+): ProgramIssueId[] {
   return Array.from(
     new Set([
-      ...Object.keys(action.effects.issuePositionShift ?? {}),
-      ...Object.keys(action.effects.issueSalienceShift ?? {}),
-      ...Object.keys(action.effects.framingChange ?? {}),
+      ...Object.keys(issuePositionShift ?? {}),
+      ...Object.keys(issueSalienceShift ?? {}),
+      ...Object.keys(framingChange ?? {}),
     ]),
   );
+}
+
+function resolveIssueRecord<T>(record: Partial<Record<ProgramIssueId, T>> | undefined, plannedAction: PlannedAction) {
+  if (!record) {
+    return undefined;
+  }
+
+  const targetIssueId = plannedAction.targetProgramIssueId ?? plannedAction.targetIssueId ?? 'housing';
+  return Object.fromEntries(Object.entries(record).map(([issueId, value]) => [issueId === 'target' ? targetIssueId : issueId, value])) as Partial<
+    Record<ProgramIssueId, T>
+  >;
 }
 
 function summarizeAction(action: CampaignActionV2) {
@@ -465,7 +566,7 @@ function ensureRuntimeDefaults(state: GameState) {
   runtime.actionCooldowns = runtime.actionCooldowns ?? {};
   runtime.legalExposure = clamp(runtime.legalExposure ?? 0, 0, 1);
   runtime.mediaVulnerability = clamp(runtime.mediaVulnerability ?? state.issueLayer?.player?.mediaVulnerability ?? 0, 0, 1);
-  runtime.staffCap = runtime.staffCap ?? state.rules.maxActionsPerWeek;
+  runtime.staffCap = runtime.staffCap ?? 6;
   runtime.staffUsed = runtime.staffUsed ?? 0;
 }
 
@@ -491,6 +592,10 @@ function completeLatentVector(vector: Partial<Record<string, number>>): LatentVe
 
 export function clampPreparedTurnoutModifier(value: number) {
   return clamp(value, -0.08, 0.08);
+}
+
+function scaleOptional(value: number | undefined, multiplier: number) {
+  return value === undefined ? undefined : round(value * multiplier);
 }
 
 // TODO(v0.6 turnout): replace baselineAbstain-in-denominator support resolution with:

@@ -1,11 +1,12 @@
+import { mediaOutlets } from '../data/mediaOutlets';
 import { regions as displayRegions } from '../data/regions';
 import type { RegionId } from '../types/region';
 
 import { essRegionMixes, essVoterSegments } from './voterSpace.generated';
 import { campaignActionsV2 } from './campaignActionsV2';
 import { createIssueLayerState } from './issueSeed';
+import { generateWeeklyMediaInvitations } from './mediaEngine';
 import type {
-  ActionType,
   CoalitionRelation,
   EventCard,
   GameRules,
@@ -350,7 +351,7 @@ export const parties: PartySeed[] = [
     reputation: { authenticity: 0.56, competence: 0.59, consistency: 0.58, controversy: 0.24, integrity: 0.62, trust: 0.58 },
     shortName: 'NS',
     startingCash: 12.4,
-    weeklyStaffCap: 3,
+    weeklyStaffCap: 6,
     winProfile: 'major',
   },
   {
@@ -369,7 +370,7 @@ export const parties: PartySeed[] = [
     reputation: { authenticity: 0.45, competence: 0.62, consistency: 0.55, controversy: 0.35, integrity: 0.5, trust: 0.5 },
     shortName: 'OF',
     startingCash: 14,
-    weeklyStaffCap: 3,
+    weeklyStaffCap: 6,
     winProfile: 'major',
   },
   {
@@ -388,7 +389,7 @@ export const parties: PartySeed[] = [
     reputation: { authenticity: 0.68, competence: 0.44, consistency: 0.72, controversy: 0.28, integrity: 0.7, trust: 0.46 },
     shortName: 'ZB',
     startingCash: 5.6,
-    weeklyStaffCap: 2,
+    weeklyStaffCap: 4.5,
     winProfile: 'small',
   },
   {
@@ -407,7 +408,7 @@ export const parties: PartySeed[] = [
     reputation: { authenticity: 0.63, competence: 0.45, consistency: 0.64, controversy: 0.38, integrity: 0.48, trust: 0.47 },
     shortName: 'PS',
     startingCash: 7.2,
-    weeklyStaffCap: 2,
+    weeklyStaffCap: 4.5,
     winProfile: 'mid',
   },
   {
@@ -426,35 +427,21 @@ export const parties: PartySeed[] = [
     reputation: { authenticity: 0.7, competence: 0.42, consistency: 0.5, controversy: 0.32, integrity: 0.52, trust: 0.49 },
     shortName: 'HR',
     startingCash: 6.4,
-    weeklyStaffCap: 2,
+    weeklyStaffCap: 4.5,
     winProfile: 'small',
   },
 ];
 
-export const actions: ActionType[] = [
-  { capacityCost: 1, category: 'Terén', cost: 1.2, description: 'Lokální akce zvyšuje organizaci, autenticitu a regionální viditelnost.', id: 'regionalRally', leaderTimeCost: 0.35, name: 'Regionální mítink', risk: 'nízké', target: 'region' },
-  { capacityCost: 1, category: 'Terén', cost: 1.6, description: 'Výjezd předsedy posiluje lokální síť, ale navyšuje únavu lídra.', id: 'leaderVisit', leaderTimeCost: 0.55, name: 'Výjezd předsedy', risk: 'střední', target: 'region' },
-  { capacityCost: 1, category: 'Online', cost: 0.8, description: 'Cílený digitální zásah zvyšuje dosah u volatilních a městských segmentů.', id: 'onlineCampaign', leaderTimeCost: 0.1, name: 'Online kampaň', risk: 'střední', target: 'region' },
-  { capacityCost: 1, category: 'Program', cost: 1, description: 'Programový balíček zvyšuje issue ownership, ale může snížit konzistenci při přestřelení.', id: 'policyPackage', leaderTimeCost: 0.25, name: 'Programový balíček', risk: 'nízké', target: 'national' },
-  { capacityCost: 1, category: 'Analytika', cost: 0.5, description: 'Stranický interní průzkum nezvyšuje podporu přímo. Zpřesňuje regionální odhady a briefing.', id: 'internalPoll', leaderTimeCost: 0, name: 'Interní průzkum', risk: 'nízké', target: 'region' },
-  { capacityCost: 1, category: 'Analytika', cost: 0.7, description: 'Focus group odhalí bariéry, jazyk a motivace vybraných voličských skupin. Podporu přímo nezvedá.', id: 'focusGroup', leaderTimeCost: 0.05, name: 'Focus group', risk: 'nízké', target: 'region' },
-  { capacityCost: 1, category: 'Analytika', cost: 0.9, description: 'Test sdělení zpřesní predikci dopadů kampaně a sníží riziko špatně zarámovaného tématu.', id: 'messageTest', leaderTimeCost: 0.05, name: 'Test sdělení', risk: 'nízké', target: 'national' },
-  { capacityCost: 1, category: 'Média', cost: 0.7, description: 'TV rozhovor má celostátní dosah a závisí na reputaci a únavě lídra.', id: 'tvInterview', leaderTimeCost: 0.45, name: 'TV rozhovor', risk: 'střední', target: 'national' },
-  { capacityCost: 1, category: 'Média', cost: 1.3, description: 'Debata je silná, ale riskantní mediální akce s vysokou volatilitou.', id: 'debate', leaderTimeCost: 0.65, name: 'Debata lídrů', risk: 'vyšší', target: 'national' },
-  { capacityCost: 1, category: 'Média', cost: 0.6, description: 'Návštěva školy aktivuje mladší segmenty a může spustit Q&A event.', id: 'schoolVisit', leaderTimeCost: 0.45, name: 'Návštěva školy', risk: 'střední', target: 'region' },
-  { capacityCost: 1, category: 'Média', cost: 0.5, description: 'Sněmovní projev posiluje kompetenci a institucionální respekt.', id: 'parliamentSpeech', leaderTimeCost: 0.35, name: 'Sněmovní projev', risk: 'nízké', target: 'national' },
-  { capacityCost: 1, category: 'Finance', cost: 0.4, description: 'Transparentnost zvedá integritu a snižuje riziko sponzorských kauz.', id: 'financeTransparency', leaderTimeCost: 0.05, name: 'Transparentnost financí', risk: 'nízké', target: 'national' },
-  { capacityCost: 1, category: 'Média', cost: 0.9, description: 'Negativní kampaň oslabuje soupeře, ale poškozuje koaliční vztahy.', id: 'negativeCampaign', leaderTimeCost: 0.15, name: 'Negativní kampaň', risk: 'vyšší', target: 'national' },
-  { capacityCost: 1, category: 'Finance', cost: 0.2, description: 'Registrovaná třetí osoba dočasně posílí sdělení, ale zhorší kontrolu nad kampaní.', id: 'thirdPartySupport', leaderTimeCost: 0, name: 'Registrovaná třetí osoba', risk: 'střední', target: 'national' },
-  { capacityCost: 1, category: 'Finance', cost: 0, description: 'Neprůhledná podpora je silný krátkodobý boost s vysokým právním a koaličním rizikem.', id: 'opaqueSupport', leaderTimeCost: 0, name: 'Neprůhledná podpora', risk: 'vyšší', target: 'national' },
-];
-
-export const media: MediaOutlet[] = [
+const legacyMedia: MediaOutlet[] = [
   { audienceMix: { conservativeMiddle: 0.3, securityHawks: 0.2, seniorSocial: 0.22 }, credibility: 0.82, editorialVector: vec(0.05, 0.05, 0.05), id: 'ct24', kind: 'public_tv', name: 'ČT24 Fórum', reach: 0.82, scrutiny: 0.72, sensationalism: 0.28 },
   { audienceMix: { liberalBusiness: 0.2, urbanProgressives: 0.26, youngRenters: 0.18 }, credibility: 0.64, editorialVector: vec(-0.1, -0.35, -0.25), id: 'metro', kind: 'digital', name: 'Metro Online', reach: 0.58, scrutiny: 0.42, sensationalism: 0.4 },
   { audienceMix: { industrialWorkers: 0.22, regionalPragmatists: 0.24, seniorSocial: 0.16 }, credibility: 0.56, editorialVector: vec(-0.1, 0.2, 0.15), id: 'region', kind: 'regional', name: 'Regionální síť', reach: 0.46, regionFocus: ['ustecky', 'moravskoslezsky', 'stredocesky'], scrutiny: 0.35, sensationalism: 0.32 },
   { audienceMix: { protestVoters: 0.28, securityHawks: 0.18, seniorSocial: 0.18 }, credibility: 0.38, editorialVector: vec(-0.15, 0.45, 0.55), id: 'blesk', kind: 'tabloid', name: 'Denní expres', reach: 0.62, scrutiny: 0.5, sensationalism: 0.82 },
 ];
+
+void legacyMedia;
+
+export const media: MediaOutlet[] = mediaOutlets;
 
 export const sponsors: SponsorOffer[] = [
   { accepted: false, amount: 1.2, donorUnits: 1200, id: 'members', kind: 'membership_drive', legalStatus: 'legal', name: 'Členská sbírka', policyPressure: {}, reputationRisk: 0, scandalRisk: 0.02, traceability: 0.95 },
@@ -553,11 +540,15 @@ export const marketingAdvisors: MarketingAdvisor[] = [
   },
 ];
 
-export const mediaInvitations: MediaInvitation[] = [
+const legacyMediaInvitations: MediaInvitation[] = [
   { format: 'interview', id: 'metroHousing', issue: 'housing', outletId: 'metro', resolved: false, risk: 0.32, week: 4 },
   { format: 'debate', id: 'ctDebate', issue: 'healthcare', outletId: 'ct24', resolved: false, risk: 0.46, week: 4 },
   { format: 'school', id: 'schoolVisitInvite', issue: 'education', outletId: 'region', resolved: false, risk: 0.38, week: 5 },
 ];
+
+void legacyMediaInvitations;
+
+export const mediaInvitations: MediaInvitation[] = [];
 
 export const coalitionRelations: CoalitionRelation[] = parties.flatMap((partyA) =>
   parties
@@ -581,7 +572,6 @@ export const defaultRules: GameRules = {
   donorCap: 3,
   finalWeek: 21,
   legalSpendCap: 40,
-  maxActionsPerWeek: 3,
   spendCap: 90,
   thirdPartyCap: 1.8,
   totalWeeks: 20,
@@ -650,14 +640,16 @@ const initialRuntime = (party: PartySeed): PartyRuntime => {
       energy: 1,
       fatigue: 0,
       officeRole: party.officeRole,
-      timeCap: party.weeklyStaffCap,
+      timeCap: party.weeklyLeaderTimeCap ?? 3,
       timeUsed: 0,
     },
     legalExposure: 0,
     legalSpend: 0,
     marketingAdvisorId: 'none',
     mediaVulnerability: 0,
+    momentum: 0.5,
     organization: { ...party.organizationBase },
+    parliamentAttendance: party.officeRole === 'outsider' ? undefined : 1,
     reputation: { ...party.reputation },
     scandalRisk: party.reputation.controversy * 0.2,
     staffCap: party.weeklyStaffCap,
@@ -669,8 +661,7 @@ const initialRuntime = (party: PartySeed): PartyRuntime => {
 export function createInitialGameState(): GameState {
   const partyRuntime = Object.fromEntries(parties.map((party) => [party.id, initialRuntime(party)])) as Record<PartyId, PartyRuntime>;
 
-  return {
-    actions,
+  const initialState: GameState = {
     campaignActionsV2,
     coalitionRelations,
     events,
@@ -678,6 +669,8 @@ export function createInitialGameState(): GameState {
     history: [],
     issueLayer: createIssueLayerState(),
     media,
+    mediaAppearanceResults: [],
+    mediaClusterModifiers: [],
     mediaInvitations,
     marketingAdvisors,
     mode: 'fullRealism',
@@ -701,6 +694,9 @@ export function createInitialGameState(): GameState {
     version: '0.5-campaign-actions-v2',
     week: 4,
   };
+
+  initialState.mediaInvitations = generateWeeklyMediaInvitations(initialState, initialState.rngSeed);
+  return initialState;
 }
 
 export const segmentLabels: Record<SegmentId, string> = Object.fromEntries(

@@ -4,19 +4,23 @@ import { formatPercent } from '@/src/game/engine';
 import { useGameStore } from '@/src/store/useGameStore';
 import { colors } from '@/src/theme/colors';
 
-export function StatusStrip() {
+export function StatusStrip({ pageTitle }: { pageTitle?: string }) {
   const gameState = useGameStore((state) => state.gameState);
-  const plannedActions = useGameStore((state) => state.plannedActions);
-  const remainingActions = gameState.rules.maxActionsPerWeek - plannedActions.length;
   const openEvents = gameState.events.filter((event) => !event.resolved).length;
 
   return (
     <View style={styles.strip}>
-      <StatusItem label="Průzkum" value={formatPercent(gameState.nationalSupport.player)} />
-      <StatusItem label="Rozpočet" value={`${gameState.partyRuntime.player.cash.toFixed(1)}M Kč`} />
-      <StatusItem label="Týden" value={`${gameState.week}/${gameState.rules.finalWeek}`} />
-      <StatusItem label="Akce" value={`${remainingActions}/${gameState.rules.maxActionsPerWeek}`} tone="accent" />
-      <StatusItem label="Události" value={String(openEvents)} tone={openEvents > 0 ? 'danger' : undefined} />
+      {pageTitle ? (
+        <View style={styles.pageTitleItem}>
+          <Text style={styles.pageTitle} numberOfLines={1}>
+            {pageTitle}
+          </Text>
+        </View>
+      ) : null}
+      <StatusItem label="Pruzkum" value={formatPercent(gameState.nationalSupport.player)} />
+      <StatusItem label="Rozpocet" value={`${gameState.partyRuntime.player.cash.toFixed(1)}M Kc`} />
+      <StatusItem label="Tyden" value={`${gameState.week}/${gameState.rules.finalWeek}`} />
+      <StatusItem label="Udalosti" value={String(openEvents)} tone={openEvents > 0 ? 'danger' : undefined} />
     </View>
   );
 }
@@ -56,16 +60,29 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   item: {
-    borderRightColor: 'rgba(255,255,255,0.16)',
+    borderRightColor: 'rgba(255,255,255,0.14)',
     borderRightWidth: 1,
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 6,
   },
   label: {
     color: '#BFD3E6',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     textTransform: 'uppercase',
+  },
+  pageTitle: {
+    color: colors.textOnPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  pageTitleItem: {
+    borderRightColor: 'rgba(255,255,255,0.14)',
+    borderRightWidth: 1,
+    flex: 1.3,
+    justifyContent: 'center',
+    minWidth: 104,
+    paddingRight: 8,
   },
   positive: {
     color: '#7BD7A4',
@@ -73,17 +90,16 @@ const styles = StyleSheet.create({
   strip: {
     backgroundColor: colors.primaryDark,
     borderColor: colors.primary,
-    borderRadius: 8,
+    borderRadius: 7,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
   value: {
     color: colors.textOnPrimary,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
-    marginTop: 1,
   },
 });

@@ -132,6 +132,7 @@ export default function PartyScreen() {
           <OperationLine label="Marketing" value={advisorLabel(advisor)} />
           <OperationLine label="Informace" value={informationLabel(runtime.informationQuality)} />
           <OperationLine label="Kapacita týdne" value={`${runtime.leader.timeCap} rozkazy`} />
+          {player.officeRole !== 'outsider' ? <OperationLine label="Sněmovna" value={parliamentLabel(runtime.parliamentAttendance)} /> : null}
           <OperationLine label="Finance" value={financePressure(runtime)} />
         </View>
       </View>
@@ -226,6 +227,16 @@ function topOrganizationRegions(regions: RegionSeed[], runtime: PartyRuntime) {
 
 function advisorLabel(advisor: MarketingAdvisor) {
   return advisor.level === 0 ? 'bez externího týmu' : `${advisor.name}`;
+}
+
+function parliamentLabel(attendance = 1) {
+  if (attendance < 0.35) {
+    return 'výrazná absence';
+  }
+  if (attendance < 0.6) {
+    return 'omezená přítomnost';
+  }
+  return 'přítomnost drží';
 }
 
 function cashLabel(cash: number) {

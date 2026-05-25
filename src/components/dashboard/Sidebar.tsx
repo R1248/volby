@@ -5,7 +5,6 @@ import { colors } from '@/src/theme/colors';
 
 type SidebarRoute =
   | '/'
-  | '/analytics'
   | '/campaign'
   | '/election'
   | '/finance'
@@ -28,7 +27,6 @@ const navItems: SidebarItem[] = [
   { id: 'program', label: 'Program', route: '/program' },
   { id: 'party', label: 'Strana', route: '/party' },
   { aliases: ['Lidr'], id: 'leader', label: 'Lídr', route: '/leader' },
-  { id: 'analytics', label: 'Analytika', route: '/analytics' },
   { id: 'finance', label: 'Finance', route: '/finance' },
   { aliases: ['Media'], id: 'media', label: 'Média', route: '/media' },
   { id: 'election', label: 'Volby', route: '/election' },
