@@ -65,6 +65,7 @@ function generic(id: string, prompt: string): MediaMiniGameQuestion {
     ],
     prompt,
     severity: 'normal',
+    // Placeholder only; selectMediaMiniGameQuestions rewrites generic fallbacks to the invitation topic.
     topicId: 'taxes',
   };
 }

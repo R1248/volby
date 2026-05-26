@@ -355,10 +355,13 @@ export type MediaMiniGameAnswer = {
   impliedFramingId?: Partial<Record<ProgramIssueId, string>>;
   impliedIssuePosition?: Partial<Record<ProgramIssueId, number>>;
   impliedIssueSalience?: Partial<Record<ProgramIssueId, number>>;
+  // Reserved for later richer media scoring; descriptive only today.
   issueSalienceDelta?: Partial<Record<ProgramIssueId, number>>;
   label: string;
   performanceDelta: number;
+  // Reserved for later richer media scoring; descriptive only today.
   reputationDelta?: Partial<ReputationVector>;
+  // Reserved for later richer media scoring; descriptive only today.
   riskyForClusters?: SegmentId[];
   text: string;
   tone?: 'specific' | 'vague' | 'aggressive' | 'empathetic' | 'technical' | 'evasive';
@@ -367,6 +370,7 @@ export type MediaMiniGameAnswer = {
 export type MediaMiniGameQuestion = {
   formats: MediaFormat[];
   id: string;
+  // Generic fallback templates are retargeted to the invitation topic during selection.
   isGenericFallback?: boolean;
   miniGameTypes: MediaMiniGameType[];
   options: MediaMiniGameAnswer[];
@@ -455,6 +459,10 @@ export type MediaAppearanceResult = {
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
   partyMomentumDelta: number;
   programEffects?: PendingProgramMediaEffect[];
+  programWarning?: {
+    text: string;
+    type: 'mismatch' | 'commitment';
+  };
   reputationDelta?: Partial<ReputationVector>;
   sentimentLabel?: string;
   sentimentRating?: MediaSentimentRating;

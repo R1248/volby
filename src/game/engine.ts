@@ -474,15 +474,16 @@ function withMediaSentiment(result: MediaAppearanceResult, status: NonNullable<M
   const hasMismatch = (result.programEffects ?? []).some((effect) => (effect.consistencyPenalty ?? 0) > 0.04);
   const hasCommitment = (result.programEffects ?? []).some((effect) => Math.abs(effect.positionShift ?? 0) > 0.08);
   const programWarning = hasMismatch
-    ? ' Pozor: odpoved je v napeti s aktualnim programem.'
+    ? { text: 'Napeti s programem', type: 'mismatch' as const }
     : hasCommitment
-    ? ' Verejny zavazek muze posunout vnimani strany.'
-    : '';
+    ? { text: 'Verejny zavazek', type: 'commitment' as const }
+    : undefined;
   return {
     ...result,
+    programWarning,
     sentimentLabel: sentiment.label,
     sentimentRating: sentiment.rating,
-    sentimentSummary: `${sentiment.summary}${programWarning}`,
+    sentimentSummary: sentiment.summary,
     status,
   };
 }
@@ -616,7 +617,7 @@ function applyProgramMediaEffects(state: GameState, result: MediaAppearanceResul
       framingId: effect.framingId ?? current.framingId,
       position: clamp(current.position + (effect.positionShift ?? 0), -2, 2),
       rigidity: clamp(current.rigidity + effect.commitmentStrength * 0.025, 0, 1),
-      salience: clamp(current.salience + (effect.salienceShift ?? 0), 0, 4),
+      salience: Math.round(clamp(current.salience + (effect.salienceShift ?? 0), 0, 4)),
     };
     consistencyPenalty += effect.consistencyPenalty ?? 0;
     changed = true;

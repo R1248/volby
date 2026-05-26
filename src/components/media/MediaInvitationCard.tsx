@@ -231,6 +231,7 @@ function SentimentResult({ result }: { result?: MediaAppearanceResult }) {
             {sentimentTitle} {result.status === 'pending' ? 'ceka' : 'zapocteno'}
           </Text>
           <Text style={styles.sentimentText}>{result.sentimentSummary}</Text>
+          {result.programWarning ? <Text style={styles.programWarning}>{result.programWarning.text}</Text> : null}
           <Text style={styles.sentimentHint}>Presny dopad se projevi v tydennim vyhodnoceni.</Text>
         </>
       ) : null}
@@ -524,6 +525,18 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: 12,
     fontWeight: '900',
+  },
+  programWarning: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFF4D6',
+    borderColor: '#D9A51C',
+    borderRadius: 8,
+    borderWidth: 1,
+    color: '#5C4200',
+    fontSize: 11,
+    fontWeight: '900',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
   },
   signal: {
     backgroundColor: colors.accent,

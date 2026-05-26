@@ -133,6 +133,7 @@ const mediaCardSource = readFileSync('src/components/media/MediaInvitationCard.t
 assert(mediaCardSource.includes('minigameStarted'), 'Media card should not start minigame before explicit accept');
 assert(mediaCardSource.includes("action: 'decline'"), 'Decline should remain available before minigame starts');
 assert(mediaCardSource.includes('currentQuestion = minigameStarted'), 'Timed questions should start only after minigame starts');
+assert(mediaCardSource.includes('result.programWarning'), 'Program warnings should render separately from sentiment text');
 assert(
   mediaCardSource.includes('ChipGroup') && mediaCardSource.includes('Problem') && mediaCardSource.includes('Hodnota') && mediaCardSource.includes('Reseni'),
   'soundbite_builder should use real chip UI',
@@ -181,6 +182,16 @@ const genericOnlyQuestions = selectMediaMiniGameQuestions(genericOnlyInvitation,
 assert(
   genericOnlyQuestions.every((question) => question.topicId === 'civilServiceReform' && question.isGenericFallback),
   'When topic-specific questions are missing, selector should return generic fallback only',
+);
+const civilServiceLabel = declineState.issueLayer.issues.find((issue) => issue.id === 'civilServiceReform')?.shortName;
+assert(civilServiceLabel, 'Expected civil service issue label');
+assert(
+  genericOnlyQuestions.every((question) => question.prompt.includes(civilServiceLabel)),
+  'Generic fallback prompt should be adapted to the invitation topic',
+);
+assert(
+  genericOnlyQuestions.every((question) => !question.prompt.includes('taxes')),
+  'Generic fallback tax placeholder must not leak into non-tax invitations',
 );
 
 const longFormInvitation = testInvitation('long-form', 'business_podcast', 'taxes', 'podcast', 0.31, 0.32, 'long_form');
@@ -253,6 +264,12 @@ const commitmentPending = respondToMediaAppearance(commitmentState, {
   preparationLevel: 'basic',
   speakerRole: 'leader',
 });
+const commitmentPendingResult = commitmentPending.pendingMediaEffects?.[0];
+assert(commitmentPendingResult?.programWarning, 'Program mismatch/commitment warning should be stored separately on the result');
+assert(
+  !commitmentPendingResult.sentimentSummary?.includes(commitmentPendingResult.programWarning.text),
+  'Program warning should not be merged into sentimentSummary',
+);
 assert(
   commitmentPending.issueLayer.player.currentIssuePositions.greenDeal.position === commitmentState.issueLayer.player.currentIssuePositions.greenDeal.position,
   'Pending program effects must not apply immediately',
@@ -264,6 +281,32 @@ const positionShift = Math.abs(
 );
 assert(positionShift > 0, 'resolveTurn should apply pending program/media effects');
 assert(positionShift <= 0.36, `Explicit answer should shift issue position conservatively, got ${positionShift}`);
+
+const decimalSalienceBase = updateProgramIssue(baseState, 'greenDeal', { position: 2, salience: 1 });
+const decimalSalienceDebate = testInvitation('green-salience-rounding', publicDebateOutlet.id, 'greenDeal', 'debate', 0.82, 0.62, 'three_questions_timed');
+const decimalSalienceMiniGame = scoreMediaMiniGameAnswers([greenRejectAnswer], [greenPositionQuestion], {
+  invitation: decimalSalienceDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: decimalSalienceBase,
+});
+const decimalSaliencePending = respondToMediaAppearance(
+  initializeComputedState({
+    ...decimalSalienceBase,
+    mediaInvitations: [decimalSalienceDebate],
+  }),
+  {
+    action: 'accept',
+    invitationId: decimalSalienceDebate.id,
+    miniGameResult: decimalSalienceMiniGame,
+    preparationLevel: 'basic',
+    speakerRole: 'leader',
+  },
+);
+const decimalSalienceResolved = resolveTurn(decimalSaliencePending, [], 113).state;
+const roundedMediaSalience = decimalSalienceResolved.issueLayer.player.currentIssuePositions.greenDeal.salience;
+assert(Number.isInteger(roundedMediaSalience), 'Media-driven program effect salience must remain an integer');
+assert(roundedMediaSalience >= 0 && roundedMediaSalience <= 4, 'Media-driven program effect salience must stay on the 0-4 scale');
 
 const marriageQuestion = mediaMiniGameQuestions.find((question) => question.id === 'marriage-position-direct');
 const marriagePivot = marriageQuestion?.options.find((answer) => answer.id === 'compromise');
