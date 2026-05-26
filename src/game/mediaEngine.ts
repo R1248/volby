@@ -278,7 +278,7 @@ export function selectMediaMiniGameQuestions(
   const pool = mediaMiniGameQuestions
     .filter((question) => question.topicId === topicId || question.isGenericFallback)
     .filter((question) => question.miniGameTypes.includes(miniGameType) || question.formats.includes(format))
-    .sort((a, b) => severityRank(preferredSeverities, a.severity) - severityRank(preferredSeverities, b.severity));
+    .sort((a, b) => Number(Boolean(a.isGenericFallback)) - Number(Boolean(b.isGenericFallback)) || severityRank(preferredSeverities, a.severity) - severityRank(preferredSeverities, b.severity));
   const selected = uniqueQuestions(pool, count);
 
   return selected.map((question, index) => ({
@@ -311,6 +311,9 @@ export function scoreMediaMiniGameAnswers(
   let controversy = 0;
   let programAlignment = 0;
   let programMismatch = 0;
+  let fiscalCredibility = 0;
+  let competence = 0;
+  let consistency = 0;
   const impliedProgramEffects: MediaMiniGameResult['impliedProgramEffects'] = [];
   for (let index = 0; index < questions.length; index += 1) {
     const question = questions[index];
@@ -319,19 +322,41 @@ export function scoreMediaMiniGameAnswers(
     const positionFit = answerPositionFit(answer, question.topicId, context.state);
     const outletRiskPenalty = (answer.tone === 'aggressive' ? context.outlet.sensationalism * 0.035 : 0) + (answer.tone === 'vague' || answer.tone === 'evasive' ? context.outlet.scrutiny * 0.025 : 0);
     const commitment = evaluateProgramCommitment(answer, question, context);
+    const tradeoffAdjustment = evaluateTradeoffAnswer(answer, question, context);
+    const axisAdjustment = evaluateAxisFit(answer, context.state);
     const directPositionQuestion = question.options.some((option) => option.impliedIssuePosition);
     const evasivePenalty = directPositionQuestion && (answer.answerType === 'pivot' || answer.tone === 'evasive') ? 0.045 : 0;
-    performance += answer.performanceDelta + speakerFit + positionFit + commitment.performanceAdjustment - outletRiskPenalty - evasivePenalty;
+    const fiscalAdjustment = (answer.fiscalCredibilityDelta ?? 0) * (question.questionKind === 'budget_constraint' || question.questionKind === 'coherence_trap' ? 0.8 : 0.45);
+    const competenceAdjustment = (answer.competenceDelta ?? 0) * 0.75;
+    const consistencyAdjustment = (answer.consistencyDelta ?? 0) * 0.65;
+    performance +=
+      answer.performanceDelta +
+      speakerFit +
+      positionFit +
+      commitment.performanceAdjustment +
+      tradeoffAdjustment +
+      axisAdjustment +
+      fiscalAdjustment +
+      competenceAdjustment +
+      consistencyAdjustment -
+      outletRiskPenalty -
+      evasivePenalty;
     controversy += (answer.controversyDelta ?? 0) + (answer.tone === 'aggressive' ? 0.02 : 0) - (answer.tone === 'empathetic' ? 0.01 : 0);
     programAlignment += commitment.alignmentScore;
     programMismatch += commitment.mismatchPenalty;
+    fiscalCredibility += answer.fiscalCredibilityDelta ?? 0;
+    competence += answer.competenceDelta ?? 0;
+    consistency += answer.consistencyDelta ?? 0;
     impliedProgramEffects.push(...commitment.effects);
   }
 
   const averagePerformance = performance / Math.max(1, questions.length);
   const averageControversy = controversy / Math.max(1, questions.length);
   return {
+    competenceAdjustment: round4(competence / Math.max(1, questions.length)),
+    consistencyAdjustment: round4(consistency / Math.max(1, questions.length)),
     controversyAdjustment: round4(clamp(averageControversy, -0.06, 0.1)),
+    fiscalCredibilityScore: round4(fiscalCredibility / Math.max(1, questions.length)),
     impliedProgramEffects,
     performanceMultiplier: round4(clamp(1 + averagePerformance, 0.75, 1.2)),
     programAlignmentScore: round4(programAlignment / Math.max(1, questions.length)),
@@ -414,6 +439,58 @@ function uniqueQuestions(questions: readonly MediaMiniGameQuestion[], count: num
     return selected;
   }
   return selected;
+}
+
+function evaluateTradeoffAnswer(
+  answer: MediaMiniGameAnswer,
+  question: MediaMiniGameQuestion,
+  context: {
+    invitation: MediaInvitation;
+    outlet: MediaOutlet;
+    speakerRole?: SpeakerRole;
+    state: GameState;
+  },
+) {
+  if (question.questionKind !== 'budget_constraint' && question.questionKind !== 'coherence_trap') {
+    return 0;
+  }
+
+  const seriousness = clamp(context.outlet.scrutiny * 0.75 + context.outlet.credibility * 0.25 + context.invitation.risk * 0.25, 0, 1.2);
+  let adjustment = 0;
+  if (answer.tone === 'vague' || answer.tone === 'evasive' || answer.answerType === 'pivot') {
+    adjustment -= 0.025 + seriousness * 0.045;
+  }
+  if (answer.fiscalCredibilityDelta !== undefined && answer.fiscalCredibilityDelta < -0.04) {
+    adjustment -= seriousness * 0.025;
+  }
+  if ((answer.payerGroups?.length ?? 0) > 0 || answer.fiscalCredibilityDelta !== undefined && answer.fiscalCredibilityDelta > 0) {
+    adjustment += 0.012 + seriousness * 0.018;
+  }
+  if ((answer.beneficiaryGroups?.length ?? 0) > 0 && (answer.payerGroups?.length ?? 0) > 0) {
+    adjustment += 0.01;
+  }
+  return adjustment;
+}
+
+function evaluateAxisFit(answer: MediaMiniGameAnswer, state: GameState) {
+  const impliedAxis = answer.impliedAxisPosition;
+  const currentAxis = state.partyRuntime.player.field.center8D;
+  if (!impliedAxis || !currentAxis) {
+    return 0;
+  }
+
+  let adjustment = 0;
+  let count = 0;
+  for (const [axis, impliedPosition] of Object.entries(impliedAxis) as [keyof typeof impliedAxis, number][]) {
+    const currentPosition = currentAxis[axis];
+    if (typeof currentPosition !== 'number') {
+      continue;
+    }
+    const distance = Math.abs(impliedPosition - currentPosition);
+    adjustment += distance <= 0.55 ? 0.006 : -Math.min(0.026, distance * 0.012);
+    count += 1;
+  }
+  return count === 0 ? 0 : adjustment / count;
 }
 
 function vagueAnswer(question: MediaMiniGameQuestion): MediaMiniGameAnswer {

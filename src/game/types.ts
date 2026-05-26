@@ -348,10 +348,15 @@ export type MediaMiniGameType =
 export type MediaMiniGameAnswer = {
   answerType?: 'position' | 'explanation' | 'attack' | 'pivot' | 'empathy' | 'technical';
   bestForSpeakerRoles?: SpeakerRole[];
+  beneficiaryGroups?: string[];
   commitmentStrength?: number;
+  competenceDelta?: number;
   consistencyRisk?: number;
+  consistencyDelta?: number;
   controversyDelta?: number;
+  fiscalCredibilityDelta?: number;
   id: string;
+  impliedAxisPosition?: Partial<Record<'econ' | 'culture' | 'authority' | 'establishment' | 'globalism' | 'green' | 'ukraine', number>>;
   impliedFramingId?: Partial<Record<ProgramIssueId, string>>;
   impliedIssuePosition?: Partial<Record<ProgramIssueId, number>>;
   impliedIssueSalience?: Partial<Record<ProgramIssueId, number>>;
@@ -359,6 +364,7 @@ export type MediaMiniGameAnswer = {
   issueSalienceDelta?: Partial<Record<ProgramIssueId, number>>;
   label: string;
   performanceDelta: number;
+  payerGroups?: string[];
   // Reserved for later richer media scoring; descriptive only today.
   reputationDelta?: Partial<ReputationVector>;
   // Reserved for later richer media scoring; descriptive only today.
@@ -375,13 +381,24 @@ export type MediaMiniGameQuestion = {
   miniGameTypes: MediaMiniGameType[];
   options: MediaMiniGameAnswer[];
   prompt: string;
+  questionKind?:
+    | 'axis_probe'
+    | 'issue_position'
+    | 'budget_constraint'
+    | 'distributional_tradeoff'
+    | 'coherence_trap'
+    | 'crisis_defense'
+    | 'rhetorical_explanation';
   severity: 'soft' | 'normal' | 'hard' | 'hostile';
   timeLimitSec?: number;
   topicId: ProgramIssueId;
 };
 
 export type MediaMiniGameResult = {
+  competenceAdjustment?: number;
+  consistencyAdjustment?: number;
   controversyAdjustment?: number;
+  fiscalCredibilityScore?: number;
   impliedProgramEffects?: PendingProgramMediaEffect[];
   performanceMultiplier: number;
   programAlignmentScore?: number;

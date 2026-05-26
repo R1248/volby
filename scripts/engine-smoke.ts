@@ -14,7 +14,7 @@ import {
   resolveTurn,
   updateProgramIssue,
 } from '../src/game/engine';
-import { mediaOutlets } from '../src/data/mediaOutlets';
+import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
 import { scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
@@ -171,10 +171,77 @@ const hostileQuestions = selectMediaMiniGameQuestions(highReachDebate, publicDeb
 assert(hostileQuestions.length === 3, 'three_questions_timed should select three questions');
 assert(hostileQuestions.every((question) => question.topicId === 'taxes' || question.timeLimitSec), 'Selected questions should match topic/format risk');
 assert(hostileQuestions.every((question) => (question.timeLimitSec ?? 0) >= 10 && (question.timeLimitSec ?? 0) <= 18), 'Timed debate questions should have 10-18 second limits');
+assert(hostileQuestions.every((question) => !question.isGenericFallback), 'Generic fallback should not be used when topic-specific tax questions are available');
 assert(
   hostileQuestions.every((question) => question.topicId === 'taxes' || question.isGenericFallback),
   'Taxes invitation must not receive unrelated off-topic fallback questions',
 );
+assert(
+  mediaMiniGameQuestions.some((question) => question.topicId === 'taxes' && question.questionKind === 'budget_constraint'),
+  'Tax questions should include a budget_constraint probe',
+);
+assert(
+  mediaMiniGameQuestions.some((question) => question.topicId === 'taxes' && question.questionKind === 'coherence_trap'),
+  'Tax questions should include a coherence_trap probe',
+);
+const taxFundingQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-funding-source');
+const taxBeneficiaryQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-beneficiaries-first');
+const taxCoherenceQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-service-promise-trap');
+assert(taxFundingQuestion && taxBeneficiaryQuestion && taxCoherenceQuestion, 'Expected realistic tax trade-off questions');
+const fundedTaxAnswer = taxFundingQuestion.options.find((answer) => answer.id === 'spending-cuts');
+const unfundedTaxAnswer = taxBeneficiaryQuestion.options.find((answer) => answer.id === 'everyone');
+const coherentTaxAnswer = taxCoherenceQuestion.options.find((answer) => answer.id === 'services-first');
+const populistTaxAnswer = taxCoherenceQuestion.options.find((answer) => answer.id === 'everything-now');
+assert(fundedTaxAnswer && unfundedTaxAnswer && coherentTaxAnswer && populistTaxAnswer, 'Expected tax trade-off answers');
+const fundedTaxScore = scoreMediaMiniGameAnswers([fundedTaxAnswer], [taxFundingQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'expert',
+  state: declineState,
+});
+const unfundedTaxScore = scoreMediaMiniGameAnswers([unfundedTaxAnswer], [taxBeneficiaryQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: declineState,
+});
+assert(
+  (unfundedTaxScore.fiscalCredibilityScore ?? 0) < (fundedTaxScore.fiscalCredibilityScore ?? 0) &&
+    (unfundedTaxScore.competenceAdjustment ?? 0) < (fundedTaxScore.competenceAdjustment ?? 0),
+  'Tax cuts for everyone without funding should score worse on fiscal credibility and competence than a funded answer',
+);
+const lightOutlet = mediaOutlets.find((outlet) => outlet.id === 'youth_creator_stream');
+assert(lightOutlet, 'Expected youth creator outlet');
+const vagueFiscalSerious = scoreMediaMiniGameAnswers([taxFundingQuestion.options.find((answer) => answer.id === 'growth-pays') ?? taxFundingQuestion.options[0]], [taxFundingQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: declineState,
+});
+const vagueFiscalLight = scoreMediaMiniGameAnswers([taxFundingQuestion.options.find((answer) => answer.id === 'growth-pays') ?? taxFundingQuestion.options[0]], [taxFundingQuestion], {
+  invitation: testInvitation('light-tax', lightOutlet.id, 'taxes', 'influencer', 0.38, 0.28, 'informal_qna'),
+  outlet: lightOutlet,
+  speakerRole: 'newFace',
+  state: declineState,
+});
+assert(vagueFiscalSerious.performanceMultiplier < vagueFiscalLight.performanceMultiplier, 'Serious outlets should penalize vague fiscal answers more than light formats');
+const coherentTaxScore = scoreMediaMiniGameAnswers([coherentTaxAnswer], [taxCoherenceQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'expert',
+  state: declineState,
+});
+const populistTaxScore = scoreMediaMiniGameAnswers([populistTaxAnswer], [taxCoherenceQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: declineState,
+});
+assert(coherentTaxScore.performanceMultiplier > populistTaxScore.performanceMultiplier, 'Coherent trade-off answer should score better than populist vague answer');
+for (const templateTopic of new Set(mediaInvitationTemplates.map((template) => template.topicId))) {
+  const topicQuestions = mediaMiniGameQuestions.filter((question) => question.topicId === templateTopic && !question.isGenericFallback);
+  assert(topicQuestions.length >= 3, `Media invitation topic ${templateTopic} should have at least three topic-specific minigame questions`);
+}
 const genericOnlyInvitation = testInvitation('generic-only', 'serious_newspaper_interview', 'civilServiceReform', 'interview', 0.42, 0.3, 'short_interview');
 const seriousNewspaper = mediaOutlets.find((outlet) => outlet.id === 'serious_newspaper_interview');
 assert(seriousNewspaper, 'Expected serious newspaper outlet');
