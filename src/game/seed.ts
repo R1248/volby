@@ -672,6 +672,7 @@ export function createInitialGameState(): GameState {
     mediaAppearanceResults: [],
     mediaClusterModifiers: [],
     mediaInvitations,
+    pendingMediaEffects: [],
     marketingAdvisors,
     mode: 'fullRealism',
     nationalSupport: { civicFront: 0, greenFuture: 0, laborUnion: 0, player: 0, regionalVoice: 0 },

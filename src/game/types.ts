@@ -397,6 +397,8 @@ export type MediaClusterImpact = {
   trust: number;
 };
 
+export type MediaSentimentRating = 1 | 2 | 3 | 4 | 5;
+
 export type MediaAppearanceResult = {
   clusterImpacts: MediaClusterImpact[];
   controversyTriggered: boolean;
@@ -404,6 +406,10 @@ export type MediaAppearanceResult = {
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
   partyMomentumDelta: number;
   reputationDelta?: Partial<ReputationVector>;
+  sentimentLabel?: string;
+  sentimentRating?: MediaSentimentRating;
+  sentimentSummary?: string;
+  status?: 'pending' | 'applied';
   successScore: number;
   summary: string;
 };
@@ -573,6 +579,7 @@ export type GameState = {
   mediaAppearanceResults?: MediaAppearanceResult[];
   mediaClusterModifiers?: MediaClusterModifier[];
   mediaInvitations: MediaInvitation[];
+  pendingMediaEffects?: MediaAppearanceResult[];
   marketingAdvisors: MarketingAdvisor[];
   mode: GameMode;
   nationalSupport: Record<PartyId, number>;

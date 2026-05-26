@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 
 import {
+  answerCampaignTrip,
+  answerProgramMediaQuestion,
   calculateAgendaPenalty,
   calculatePartyCoherence,
   deriveLatentFromIssues,
@@ -100,6 +102,20 @@ assertOk(
   framedGraph.unresolvedTensionPenalty < unframedGraph.unresolvedTensionPenalty,
   'Useful framing should reduce requires_framing/tension penalty',
 );
+const irrelevantFramingEnergy = clonePositions(unframedEnergy);
+irrelevantFramingEnergy.energyPrices = { ...irrelevantFramingEnergy.energyPrices, framingId: 'cheapEnergy' };
+const irrelevantFramingGraph = evaluateIssueGraph(irrelevantFramingEnergy, layer.relations, layer.framings);
+assertOk(
+  Math.abs(irrelevantFramingGraph.unresolvedTensionPenalty - unframedGraph.unresolvedTensionPenalty) < 0.000001,
+  'Irrelevant framing should not reduce requires_framing/tension penalty',
+);
+
+const broadCoherentAgenda = clonePositions(layer.player.currentIssuePositions);
+for (const issue of ['greenDeal', 'coalPhaseout', 'nuclearEnergy', 'energyPrices', 'ukraineSupport', 'nato', 'euIntegration', 'pensions', 'redistribution']) {
+  broadCoherentAgenda[issue] = { ...broadCoherentAgenda[issue], position: 2, salience: 4 };
+}
+const broadCoherentPenalty = calculateAgendaPenalty(broadCoherentAgenda, layer.issues, layer.relations);
+assertOk(broadCoherentPenalty > 0.5, `Broad flagship agenda should still be penalized, got ${broadCoherentPenalty}`);
 
 const greenVoter: VoterSegment = {
   axisSalience: { authority: 1, culture: 1, econ: 1 },
@@ -163,6 +179,40 @@ assertOk(
   issueLayerUtilityModifier(artificiallyIncoherent, greenVoter, true) < issueLayerUtilityModifier(artificiallyCoherent, greenVoter, true),
   'Incoherence should lower voter utility',
 );
+const noBonusUtilityLayer = {
+  ...supportiveLayer,
+  player: {
+    ...supportiveLayer.player,
+    coherenceBreakdown: {
+      ...supportiveLayer.player.coherenceBreakdown,
+      clusterCoherenceBonus: 0,
+      mobilizationOverlapBonus: 0,
+      sameFamilyBonus: 0,
+    },
+  },
+};
+assertOk(
+  issueLayerUtilityModifier(noBonusUtilityLayer, greenVoter, true) === issueLayerUtilityModifier(supportiveLayer, greenVoter, true),
+  'Graph synergy bonuses should not directly boost voter utility',
+);
+
+let mediaQuestionLayer = clonePositions(layer);
+for (let index = 0; index < layer.mediaQuestions.length; index += 1) {
+  const pendingId = mediaQuestionLayer.pendingMediaQuestionId;
+  if (!pendingId) break;
+  const question = mediaQuestionLayer.mediaQuestions.find((item) => item.id === pendingId);
+  mediaQuestionLayer = answerProgramMediaQuestion(mediaQuestionLayer, pendingId, question?.answerOptions[0]?.id ?? '', 0.6);
+}
+assertOk(mediaQuestionLayer.pendingMediaQuestionId === undefined, 'Program media questions should not cycle indefinitely');
+
+let tripLayer = clonePositions(layer);
+for (let index = 0; index < layer.tripEvents.length; index += 1) {
+  const pendingId = tripLayer.pendingCampaignTripId;
+  if (!pendingId) break;
+  const trip = tripLayer.tripEvents.find((item) => item.id === pendingId);
+  tripLayer = answerCampaignTrip(tripLayer, pendingId, trip?.options[0]?.id ?? '', 0.6);
+}
+assertOk(tripLayer.pendingCampaignTripId === undefined, 'Campaign trips should not cycle indefinitely');
 
 const latent = deriveLatentFromIssues(layer.player.currentIssuePositions, layer.issues, layer.framings);
 assertOk(typeof latent.econ === 'number', 'Derived latent econ should be numeric');

@@ -373,6 +373,21 @@ export function updateIssuePosition(
   if (!current) {
     return layer;
   }
+  const maxChanges = layer.player.maxProgramChangesPerWeek ?? 3;
+  const usedChanges = layer.player.programChangesThisWeek ?? 0;
+  if (usedChanges >= maxChanges) {
+    return layer;
+  }
+
+  const nextPosition = sanitizeIssuePosition({ ...current, ...patch });
+  if (
+    nextPosition.position === current.position &&
+    nextPosition.salience === current.salience &&
+    nextPosition.rigidity === current.rigidity &&
+    nextPosition.framingId === current.framingId
+  ) {
+    return layer;
+  }
 
   const nextLayer: IssueLayerState = {
     ...layer,
@@ -380,8 +395,9 @@ export function updateIssuePosition(
       ...layer.player,
       currentIssuePositions: {
         ...layer.player.currentIssuePositions,
-        [issueId]: sanitizeIssuePosition({ ...current, ...patch }),
+        [issueId]: nextPosition,
       },
+      programChangesThisWeek: usedChanges + 1,
     },
   };
 
@@ -400,13 +416,21 @@ export function answerProgramMediaQuestion(
 ): IssueLayerState {
   const question = layer.mediaQuestions.find((item) => item.id === questionId);
   const answer = question?.answerOptions.find((item) => item.id === answerId);
-  if (!question || !answer) {
+  const resolvedIds = layer.resolvedMediaQuestionIds ?? [];
+  if (!question || !answer || questionId !== layer.pendingMediaQuestionId || resolvedIds.includes(questionId)) {
     return layer;
   }
 
   const nextLayer = applyMediaAnswer(layer, question.issueId, answer);
   return withFeedback(
-    recalculateIssueLayer({ ...nextLayer, pendingMediaQuestionId: nextPendingId(layer.mediaQuestions, questionId) }, flexibility),
+    recalculateIssueLayer(
+      {
+        ...nextLayer,
+        pendingMediaQuestionId: nextPendingId(layer.mediaQuestions, questionId, [...resolvedIds, questionId]),
+        resolvedMediaQuestionIds: [...resolvedIds, questionId],
+      },
+      flexibility,
+    ),
     question.title,
     answer.description,
   );
@@ -420,13 +444,21 @@ export function answerCampaignTrip(
 ): IssueLayerState {
   const trip = layer.tripEvents.find((item) => item.id === tripId);
   const option = trip?.options.find((item) => item.id === optionId);
-  if (!trip || !option) {
+  const resolvedIds = layer.resolvedCampaignTripIds ?? [];
+  if (!trip || !option || tripId !== layer.pendingCampaignTripId || resolvedIds.includes(tripId)) {
     return layer;
   }
 
   const nextLayer = applyTripOption(layer, option);
   return withFeedback(
-    recalculateIssueLayer({ ...nextLayer, pendingCampaignTripId: nextPendingId(layer.tripEvents, tripId) }, flexibility),
+    recalculateIssueLayer(
+      {
+        ...nextLayer,
+        pendingCampaignTripId: nextPendingId(layer.tripEvents, tripId, [...resolvedIds, tripId]),
+        resolvedCampaignTripIds: [...resolvedIds, tripId],
+      },
+      flexibility,
+    ),
     trip.title,
     option.description,
   );
@@ -439,13 +471,14 @@ export function answerDebateAttack(
 ): IssueLayerState {
   const attack = layer.debateAttack;
   const response = attack?.responseOptions.find((item) => item.id === responseId);
-  if (!attack || !response) {
+  const resolvedIds = layer.resolvedDebateAttackIds ?? [];
+  if (!attack || !response || resolvedIds.includes(attack.id)) {
     return layer;
   }
 
   const nextLayer = applyDebateResponse(layer, response, attack.relatedIssues);
   return withFeedback(
-    recalculateIssueLayer({ ...nextLayer, debateAttack: undefined }, flexibility),
+    recalculateIssueLayer({ ...nextLayer, debateAttack: undefined, resolvedDebateAttackIds: [...resolvedIds, attack.id] }, flexibility),
     attack.title,
     response.description,
   );
@@ -701,17 +734,32 @@ function hasUsefulFraming(
   partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
   framings: readonly IssueFraming[],
 ) {
+  if (relation.type !== 'requires_framing' && relation.type !== 'tension') {
+    return false;
+  }
+
   const selectedFramings = [partyIssues[relation.from]?.framingId, partyIssues[relation.to]?.framingId]
     .map((framingId) => framings.find((framing) => framing.id === framingId))
+    .filter((framing) => framing?.issueId === relation.from || framing?.issueId === relation.to)
     .filter(Boolean) as IssueFraming[];
 
-  return selectedFramings.some(
-    (framing) =>
-      framing.legibilityModifier >= 0.08 ||
-      framing.controversyModifier < 0 ||
-      framing.swingAppealModifier >= 0.06 ||
-      Object.values(framing.dimensionEffects ?? {}).some((value) => Math.abs(value) >= 0.05),
-  );
+  return selectedFramings.some((framing) => {
+    if (framing.resolvesRelations?.includes(relationKey(relation))) {
+      return true;
+    }
+
+    return Boolean(
+      framing.resolvesRelationTypes?.includes(relation.type) &&
+        (framing.legibilityModifier >= 0.08 ||
+          framing.controversyModifier <= -0.08 ||
+          framing.swingAppealModifier >= 0.06 ||
+          Object.values(framing.dimensionEffects ?? {}).some((value) => Math.abs(value) >= 0.05)),
+    );
+  });
+}
+
+function relationKey(relation: IssueRelation) {
+  return `${relation.from}->${relation.to}`;
 }
 
 function addRelationNote(notes: IssueRelationNote[], relation: IssueRelation, score: number, label: string) {
@@ -829,12 +877,12 @@ function withFeedback(layer: IssueLayerState, title: string, message: string): I
   };
 }
 
-function nextPendingId<T extends { id: string }>(items: readonly T[], currentId: string) {
+function nextPendingId<T extends { id: string }>(items: readonly T[], currentId: string, resolvedIds: readonly string[]) {
   const index = items.findIndex((item) => item.id === currentId);
   if (index < 0 || items.length === 0) {
     return undefined;
   }
-  return items[(index + 1) % items.length]?.id;
+  return items.slice(index + 1).find((item) => !resolvedIds.includes(item.id))?.id;
 }
 
 function issueName(issues: readonly Issue[], issueId: ProgramIssueId) {

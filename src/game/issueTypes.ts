@@ -46,6 +46,8 @@ export type IssueFraming = {
   issueId: ProgramIssueId;
   legibilityModifier: number;
   name: string;
+  resolvesRelations?: string[];
+  resolvesRelationTypes?: IssueRelationType[];
   swingAppealModifier: number;
 };
 
@@ -122,8 +124,10 @@ export type IssueLayerPartyState = {
   coreLoyalty: number;
   currentIssuePositions: Record<ProgramIssueId, PartyIssuePosition>;
   factionTension: number;
+  maxProgramChangesPerWeek?: number;
   mediaVulnerability: number;
   originalIssuePositions: Record<ProgramIssueId, PartyIssuePosition>;
+  programChangesThisWeek?: number;
   programLegibility: number;
   swingAppeal: number;
 };
@@ -220,6 +224,9 @@ export type IssueLayerState = {
   pendingMediaQuestionId?: string;
   player: IssueLayerPartyState;
   relations: IssueRelation[];
+  resolvedCampaignTripIds?: string[];
+  resolvedDebateAttackIds?: string[];
+  resolvedMediaQuestionIds?: string[];
   tripEvents: CampaignTripEvent[];
 };
 

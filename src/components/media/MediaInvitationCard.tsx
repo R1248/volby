@@ -1,15 +1,16 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { MediaAppearanceDecision, MediaInvitation, MediaOutlet } from '@/src/game/types';
+import type { MediaAppearanceDecision, MediaAppearanceResult, MediaInvitation, MediaOutlet } from '@/src/game/types';
 import { colors } from '@/src/theme/colors';
 
 type MediaInvitationCardProps = {
   invitation: MediaInvitation;
   onDecision: (decision: MediaAppearanceDecision) => void;
   outlet?: MediaOutlet;
+  result?: MediaAppearanceResult;
 };
 
-export function MediaInvitationCard({ invitation, onDecision, outlet }: MediaInvitationCardProps) {
+export function MediaInvitationCard({ invitation, onDecision, outlet, result }: MediaInvitationCardProps) {
   const reach = Math.round((invitation.expectedReach ?? outlet?.baseReach ?? outlet?.reach ?? 0) * 100);
 
   return (
@@ -22,7 +23,7 @@ export function MediaInvitationCard({ invitation, onDecision, outlet }: MediaInv
               {outlet?.name ?? invitation.outletId}
             </Text>
             <Text style={styles.title} numberOfLines={2}>
-              {invitation.title ?? 'Mediální pozvánka'}
+              {invitation.title ?? 'Medialni pozvanka'}
             </Text>
           </View>
           <View style={styles.reach}>
@@ -32,14 +33,25 @@ export function MediaInvitationCard({ invitation, onDecision, outlet }: MediaInv
         </View>
 
         {invitation.resolved ? (
-          <Text style={styles.resolved}>Pozvánka vyřešena</Text>
+          <View style={styles.sentimentBox}>
+            <Text style={styles.resolved}>Pozvanka vyresena</Text>
+            {result?.sentimentRating ? (
+              <>
+                <Text style={styles.sentimentTitle}>
+                  Medialni sentiment: {result.sentimentRating}/5 ({result.sentimentLabel}) {result.status === 'pending' ? 'ceka' : 'zapocteno'}
+                </Text>
+                <Text style={styles.sentimentText}>{result.sentimentSummary}</Text>
+                <Text style={styles.sentimentHint}>Presny dopad se projevi v tydennim vyhodnoceni.</Text>
+              </>
+            ) : null}
+          </View>
         ) : (
           <View style={styles.actions}>
             <Pressable
               onPress={() => onDecision({ action: 'decline', invitationId: invitation.id, preparationLevel: 'none' })}
               style={[styles.action, styles.decline]}
             >
-              <Text style={[styles.actionText, styles.declineText]}>Odmítnout</Text>
+              <Text style={[styles.actionText, styles.declineText]}>Odmitnout</Text>
             </Pressable>
             <Pressable
               onPress={() =>
@@ -52,7 +64,7 @@ export function MediaInvitationCard({ invitation, onDecision, outlet }: MediaInv
               }
               style={[styles.action, styles.accept]}
             >
-              <Text style={styles.acceptText}>Předseda</Text>
+              <Text style={styles.acceptText}>Predseda</Text>
             </Pressable>
             <Pressable
               onPress={() =>
@@ -65,7 +77,7 @@ export function MediaInvitationCard({ invitation, onDecision, outlet }: MediaInv
               }
               style={[styles.action, styles.acceptAlt]}
             >
-              <Text style={styles.acceptText}>Regionální tvář</Text>
+              <Text style={styles.acceptText}>Regionalni tvar</Text>
             </Pressable>
           </View>
         )}
@@ -182,9 +194,29 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: 12,
     fontWeight: '900',
-    marginTop: 11,
     paddingHorizontal: 8,
     paddingVertical: 6,
+  },
+  sentimentBox: {
+    gap: 5,
+    marginTop: 10,
+  },
+  sentimentHint: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 15,
+  },
+  sentimentText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  sentimentTitle: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
   },
   signal: {
     backgroundColor: colors.accent,
@@ -197,4 +229,3 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
-

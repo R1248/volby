@@ -20,12 +20,14 @@ export default function MediaScreen() {
         ) : null}
         {weeklyInvitations.map((invitation) => {
           const outlet = gameState.media.find((item) => item.id === invitation.outletId);
+          const result = gameState.mediaAppearanceResults?.find((item) => item.invitationId === invitation.id);
           return (
             <MediaInvitationCard
               invitation={invitation}
               key={invitation.id}
               onDecision={respondToEarnedMediaInvitation}
               outlet={outlet}
+              result={result}
             />
           );
         })}
@@ -52,4 +54,3 @@ const styles = StyleSheet.create({
     padding: 10,
   },
 });
-

@@ -105,6 +105,7 @@ function asFullRealismState(state: GameState): GameState {
     media: mediaOutlets,
     mediaAppearanceResults: state.mediaAppearanceResults ?? [],
     mediaClusterModifiers: state.mediaClusterModifiers ?? [],
+    pendingMediaEffects: state.pendingMediaEffects ?? [],
     mode: 'fullRealism',
     partyRuntime,
     publicPollsterId: state.publicPollsterId ?? 'medianPlus',
@@ -122,7 +123,14 @@ function migrateIssueLayer(issueLayer: GameState['issueLayer']): GameState['issu
 
   return {
     ...layerWithoutPackages,
-    player: playerWithoutPackages,
+    player: {
+      ...playerWithoutPackages,
+      maxProgramChangesPerWeek: playerWithoutPackages.maxProgramChangesPerWeek ?? 3,
+      programChangesThisWeek: playerWithoutPackages.programChangesThisWeek ?? 0,
+    },
+    resolvedCampaignTripIds: layerWithoutPackages.resolvedCampaignTripIds ?? [],
+    resolvedDebateAttackIds: layerWithoutPackages.resolvedDebateAttackIds ?? [],
+    resolvedMediaQuestionIds: layerWithoutPackages.resolvedMediaQuestionIds ?? [],
   };
 }
 

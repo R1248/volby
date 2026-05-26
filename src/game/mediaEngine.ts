@@ -9,6 +9,7 @@ import type {
   MediaInvitation,
   MediaOutlet,
   MediaPreparationLevel,
+  MediaSentimentRating,
   ReputationVector,
   SpeakerRole,
   VoterCluster,
@@ -189,6 +190,36 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     reputationDelta: reputationDeltaFor(speakerRole, successScore, controversyTriggered, speakerProfile.competenceMultiplier),
     successScore: round4(successScore),
     summary: `${outlet.name}: ${speakerRoleProfiles[speakerRole].name} v formatu ${formatProfile.name} ${successScore >= 0.55 ? 'posilil medialni vykon' : 'mel omezeny efekt'}${controversyTriggered ? ' a vyvolal kontroverzi' : ''}.`,
+  };
+}
+
+export function mediaSentimentFromResult(result: MediaAppearanceResult): {
+  label: string;
+  rating: MediaSentimentRating;
+  summary: string;
+} {
+  const adjusted = result.successScore - (result.controversyTriggered ? 0.12 : 0);
+  const rating: MediaSentimentRating =
+    adjusted < 0.25 ? 1 : adjusted < 0.43 ? 2 : adjusted < 0.58 ? 3 : adjusted < 0.76 ? 4 : 5;
+  const labels: Record<MediaSentimentRating, string> = {
+    1: 'Průšvih',
+    2: 'Slabé',
+    3: 'Smíšené',
+    4: 'Dobré',
+    5: 'Výborné',
+  };
+  const summaries: Record<MediaSentimentRating, string> = {
+    1: 'Vystup pusobi jako viditelne nezvladnuty a bude potrebovat korekci.',
+    2: 'Odezva je slaba, bez jasneho zisku a s rizikem dozvuku.',
+    3: 'Odezva je smisena: cast publika slysi sdeleni, cast vidi slabiny.',
+    4: 'Vystup pusobi dobre a pravdepodobne posili citelnost kampane.',
+    5: 'Vystup ma vybornou odezvu a vyrazne zvedl medialni dojem.',
+  };
+
+  return {
+    label: labels[rating],
+    rating,
+    summary: summaries[rating],
   };
 }
 

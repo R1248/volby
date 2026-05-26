@@ -57,6 +57,8 @@ export default function ProgramScreen() {
   const activeFrame = layer.ideologicalFrames.find((frame) => frame.id === layer.player.activeIdeologicalFrame);
   const topPenalties = coherence.relationNotes.filter((note) => note.score > 0).slice(0, 4);
   const topSynergies = coherence.relationNotes.filter((note) => note.score < 0).slice(0, 4);
+  const programChangesLeft = Math.max(0, (layer.player.maxProgramChangesPerWeek ?? 3) - (layer.player.programChangesThisWeek ?? 0));
+  const canEditProgram = programChangesLeft > 0;
 
   if (!selectedIssue || !selectedPosition) {
     return null;
@@ -110,11 +112,16 @@ export default function ProgramScreen() {
         <Card>
           <SectionTitle>{selectedIssue.name}</SectionTitle>
           <Text style={styles.bodyText}>{selectedIssue.description}</Text>
+          <Text style={styles.editBudget}>
+            Upravy programu tento tyden: {programChangesLeft}/{layer.player.maxProgramChangesPerWeek ?? 3}
+          </Text>
+          {!canEditProgram ? <Text style={styles.limitText}>Dalsi upravy programu budou dostupne po tydennim vyhodnoceni.</Text> : null}
 
           <Text style={styles.controlTitle}>Pozice</Text>
           <View style={styles.controlRow}>
             {positionOptions.map((option) => (
               <ChoiceButton
+                disabled={!canEditProgram}
                 isActive={selectedPosition.position === option.value}
                 key={option.value}
                 label={selectedIssue.id === 'greenDeal' ? greenDealPositionLabel(option.value) : option.label}
@@ -127,6 +134,7 @@ export default function ProgramScreen() {
           <View style={styles.controlRow}>
             {salienceOptions.map((option) => (
               <ChoiceButton
+                disabled={!canEditProgram}
                 isActive={selectedPosition.salience === option.value}
                 key={option.value}
                 label={option.label}
@@ -141,9 +149,10 @@ export default function ProgramScreen() {
               <View style={styles.framingStack}>
                 {framings.map((framing) => (
                   <Pressable
+                    disabled={!canEditProgram}
                     key={framing.id}
                     onPress={() => updateProgramIssue(selectedIssue.id, { framingId: framing.id })}
-                    style={[styles.framingCard, selectedPosition.framingId === framing.id && styles.framingCardActive]}
+                    style={[styles.framingCard, selectedPosition.framingId === framing.id && styles.framingCardActive, !canEditProgram && styles.disabledCard]}
                   >
                     <Text style={styles.framingTitle}>{framing.name}</Text>
                     <Text style={styles.framingText}>{framing.description}</Text>
@@ -249,10 +258,10 @@ export default function ProgramScreen() {
   );
 }
 
-function ChoiceButton({ isActive, label, onPress }: { isActive: boolean; label: string; onPress: () => void }) {
+function ChoiceButton({ disabled = false, isActive, label, onPress }: { disabled?: boolean; isActive: boolean; label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.choiceButton, isActive && styles.choiceButtonActive]}>
-      <Text style={[styles.choiceText, isActive && styles.choiceTextActive]} numberOfLines={1}>
+    <Pressable disabled={disabled} onPress={onPress} style={[styles.choiceButton, isActive && styles.choiceButtonActive, disabled && styles.disabledButton]}>
+      <Text style={[styles.choiceText, isActive && styles.choiceTextActive, disabled && styles.disabledText]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -435,6 +444,20 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textTransform: 'uppercase',
   },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  disabledCard: {
+    opacity: 0.55,
+  },
+  disabledText: {
+    color: colors.textMuted,
+  },
+  editBudget: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   effect: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -545,6 +568,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  limitText: {
+    color: colors.accentDark,
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 15,
   },
   mainGrid: {
     alignItems: 'flex-start',

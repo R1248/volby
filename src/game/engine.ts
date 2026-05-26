@@ -4,7 +4,7 @@ import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/region
 import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
 import { createIssueLayerState } from './issueSeed';
-import { generateWeeklyMediaInvitations, resolveMediaAppearance } from './mediaEngine';
+import { generateWeeklyMediaInvitations, mediaSentimentFromResult, resolveMediaAppearance } from './mediaEngine';
 import { voterClusters } from '../data/mediaOutlets';
 import { deriveParliamentAttendancePressure } from './programMandateCatalog';
 import {
@@ -113,6 +113,7 @@ export function resolveTurn(state: GameState, plannedActions: PlannedAction[], r
 
   applyMarketingAdvisorCost(nextState, riskNotes);
   applyMediaInvitations(nextState, mediaNotes, riskNotes);
+  applyPendingMediaEffects(nextState, mediaNotes, riskNotes);
 
   for (const plannedAction of plannedActions) {
     applyAction(nextState, plannedAction, actionEffects, riskNotes);
@@ -375,7 +376,11 @@ export function updateProgramIssue(
   const nextState = cloneState(state);
   ensureIssueLayer(nextState);
   const flexibility = nextState.partyRuntime.player.field.flexibility;
-  nextState.issueLayer = updateIssuePositionInLayer(nextState.issueLayer, issueId, patch, flexibility);
+  const nextLayer = updateIssuePositionInLayer(nextState.issueLayer, issueId, patch, flexibility);
+  if (nextLayer === nextState.issueLayer) {
+    return state;
+  }
+  nextState.issueLayer = nextLayer;
   applyIssueLayerToPlayer(nextState);
 
   return initializeComputedState(nextState);
@@ -384,7 +389,11 @@ export function updateProgramIssue(
 export function answerProgramMediaQuestion(state: GameState, questionId: string, answerId: string): GameState {
   const nextState = cloneState(state);
   ensureIssueLayer(nextState);
-  nextState.issueLayer = answerProgramMediaQuestionInLayer(nextState.issueLayer, questionId, answerId, nextState.partyRuntime.player.field.flexibility);
+  const nextLayer = answerProgramMediaQuestionInLayer(nextState.issueLayer, questionId, answerId, nextState.partyRuntime.player.field.flexibility);
+  if (nextLayer === nextState.issueLayer) {
+    return state;
+  }
+  nextState.issueLayer = nextLayer;
   applyIssueLayerToPlayer(nextState);
 
   return initializeComputedState(nextState);
@@ -393,7 +402,11 @@ export function answerProgramMediaQuestion(state: GameState, questionId: string,
 export function answerCampaignTrip(state: GameState, tripId: string, optionId: string): GameState {
   const nextState = cloneState(state);
   ensureIssueLayer(nextState);
-  nextState.issueLayer = answerCampaignTripInLayer(nextState.issueLayer, tripId, optionId, nextState.partyRuntime.player.field.flexibility);
+  const nextLayer = answerCampaignTripInLayer(nextState.issueLayer, tripId, optionId, nextState.partyRuntime.player.field.flexibility);
+  if (nextLayer === nextState.issueLayer) {
+    return state;
+  }
+  nextState.issueLayer = nextLayer;
   applyIssueLayerToPlayer(nextState);
 
   return initializeComputedState(nextState);
@@ -402,7 +415,11 @@ export function answerCampaignTrip(state: GameState, tripId: string, optionId: s
 export function answerDebateAttack(state: GameState, responseId: string): GameState {
   const nextState = cloneState(state);
   ensureIssueLayer(nextState);
-  nextState.issueLayer = answerDebateAttackInLayer(nextState.issueLayer, responseId, nextState.partyRuntime.player.field.flexibility);
+  const nextLayer = answerDebateAttackInLayer(nextState.issueLayer, responseId, nextState.partyRuntime.player.field.flexibility);
+  if (nextLayer === nextState.issueLayer) {
+    return state;
+  }
+  nextState.issueLayer = nextLayer;
   applyIssueLayerToPlayer(nextState);
 
   return initializeComputedState(nextState);
@@ -436,23 +453,38 @@ export function receiveMediaInvitations(state: GameState, invitations: MediaInvi
 export function respondToMediaAppearance(state: GameState, decision: MediaAppearanceDecision): GameState {
   const nextState = cloneState(state);
   const invitation = nextState.mediaInvitations.find((item) => item.id === decision.invitationId);
-  const runtime = nextState.partyRuntime.player;
 
-  if (!invitation) {
+  if (!invitation || invitation.resolved) {
     return state;
   }
 
   const response = decision.action === 'decline' ? 'decline' : decision.speakerRole === 'leader' ? 'leader' : 'delegate';
   invitation.response = response;
   invitation.resolved = true;
-  const result = resolveMediaAppearance(decision, nextState);
-  applyMediaAppearanceResult(nextState, result);
+  const result = withMediaSentiment(resolveMediaAppearance(decision, nextState), 'pending');
+  nextState.pendingMediaEffects = [result, ...(nextState.pendingMediaEffects ?? [])].slice(0, 20);
+  nextState.mediaAppearanceResults = [publicMediaResult(result), ...(nextState.mediaAppearanceResults ?? [])].slice(0, 20);
   applyMediaAppearanceCosts(nextState, decision, invitation);
 
-  runtime.field.amplitude = clamp(runtime.field.amplitude + result.partyMomentumDelta * 0.8, 0.35, 1.8);
-  runtime.momentum = clamp((runtime.momentum ?? 0.5) + result.partyMomentumDelta, 0, 1);
+  return nextState;
+}
 
-  return initializeComputedState(nextState);
+function withMediaSentiment(result: MediaAppearanceResult, status: NonNullable<MediaAppearanceResult['status']>): MediaAppearanceResult {
+  const sentiment = mediaSentimentFromResult(result);
+  return {
+    ...result,
+    sentimentLabel: sentiment.label,
+    sentimentRating: sentiment.rating,
+    sentimentSummary: sentiment.summary,
+    status,
+  };
+}
+
+function publicMediaResult(result: MediaAppearanceResult): MediaAppearanceResult {
+  return {
+    ...result,
+    clusterImpacts: [],
+  };
 }
 
 function applyMediaAppearanceCosts(state: GameState, decision: MediaAppearanceDecision, invitation: MediaInvitation) {
@@ -478,32 +510,40 @@ function applyMediaAppearanceCosts(state: GameState, decision: MediaAppearanceDe
 
 function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceResult) {
   const runtime = state.partyRuntime.player;
-  state.mediaAppearanceResults = [result, ...(state.mediaAppearanceResults ?? [])].slice(0, 20);
+  const appliedResult = withMediaSentiment(result, 'applied');
+  const existingResults = state.mediaAppearanceResults ?? [];
+  const existingIndex = existingResults.findIndex((item) => item.invitationId === result.invitationId);
+  state.mediaAppearanceResults =
+    existingIndex >= 0
+      ? existingResults.map((item, index) => (index === existingIndex ? publicMediaResult(appliedResult) : item)).slice(0, 20)
+      : [publicMediaResult(appliedResult), ...existingResults].slice(0, 20);
   state.mediaClusterModifiers = [
-    ...result.clusterImpacts
+    ...appliedResult.clusterImpacts
       .filter((impact) => Math.abs(impact.supportDelta) > 0.0004)
       .map((impact) => ({
         amount: impact.supportDelta,
         clusterId: impact.clusterId,
         expiresWeek: state.week + 3,
-        sourceInvitationId: result.invitationId,
+        sourceInvitationId: appliedResult.invitationId,
         weekApplied: state.week,
       })),
     ...(state.mediaClusterModifiers ?? []).filter((modifier) => modifier.expiresWeek >= state.week),
   ].slice(0, 60);
 
-  applyReputationDelta(runtime.reputation, result.reputationDelta);
-  applyMediaIssueSalience(state, result.issueSalienceDelta);
+  applyReputationDelta(runtime.reputation, appliedResult.reputationDelta);
+  applyMediaIssueSalience(state, appliedResult.issueSalienceDelta);
+  runtime.field.amplitude = clamp(runtime.field.amplitude + appliedResult.partyMomentumDelta * 0.8, 0.35, 1.8);
+  runtime.momentum = clamp((runtime.momentum ?? 0.5) + appliedResult.partyMomentumDelta, 0, 1);
 
-  if (result.controversyTriggered) {
+  if (appliedResult.controversyTriggered) {
     runtime.mediaVulnerability = clamp((runtime.mediaVulnerability ?? 0) + 0.035, 0, 1);
     runtime.scandalRisk = clamp(runtime.scandalRisk + 0.025, 0, 1);
     state.scandals.push({
       evidence: 0.2,
-      id: `media-controversy-${state.week}-${result.invitationId}`,
+      id: `media-controversy-${state.week}-${appliedResult.invitationId}`,
       legalExposure: 0.03,
       resolved: false,
-      sourceOutletId: state.mediaInvitations.find((invitation) => invitation.id === result.invitationId)?.outletId,
+      sourceOutletId: state.mediaInvitations.find((invitation) => invitation.id === appliedResult.invitationId)?.outletId,
       targetPartyId: 'player',
       title: 'Dozvuky kontroverzniho medialniho vystoupeni',
       traceability: 0.64,
@@ -902,6 +942,11 @@ function ensureIssueLayer(state: GameState) {
   if (!state.issueLayer) {
     state.issueLayer = createIssueLayerState();
   }
+  state.issueLayer.player.maxProgramChangesPerWeek = state.issueLayer.player.maxProgramChangesPerWeek ?? 3;
+  state.issueLayer.player.programChangesThisWeek = state.issueLayer.player.programChangesThisWeek ?? 0;
+  state.issueLayer.resolvedCampaignTripIds = state.issueLayer.resolvedCampaignTripIds ?? [];
+  state.issueLayer.resolvedDebateAttackIds = state.issueLayer.resolvedDebateAttackIds ?? [];
+  state.issueLayer.resolvedMediaQuestionIds = state.issueLayer.resolvedMediaQuestionIds ?? [];
 }
 
 function applyIssueLayerToPlayer(state: GameState) {
@@ -951,6 +996,25 @@ function applyMediaInvitations(state: GameState, mediaNotes: string[], riskNotes
       riskNotes.push('Nezodpovězená mediální pozvánka může poškodit otevřenost kampaně.');
     }
   }
+}
+
+function applyPendingMediaEffects(state: GameState, mediaNotes: string[], riskNotes: string[]) {
+  const pending = (state.pendingMediaEffects ?? []).filter((result) => result.status !== 'applied');
+  if (pending.length === 0) {
+    state.pendingMediaEffects = [];
+    return;
+  }
+
+  for (const result of pending.reverse()) {
+    applyMediaAppearanceResult(state, result);
+    const sentiment = mediaSentimentFromResult(result);
+    mediaNotes.push(`Medialni sentiment ${sentiment.rating}/5 (${sentiment.label}): ${sentiment.summary}`);
+    if (result.controversyTriggered) {
+      riskNotes.push('Kontroverzni medialni vystup se propsal do tydenniho rizika.');
+    }
+  }
+
+  state.pendingMediaEffects = [];
 }
 
 function applyUnansweredQuestions(state: GameState, riskNotes: string[]) {
@@ -1301,6 +1365,8 @@ function resetLeaderWeek(state: GameState) {
     runtime.leader.energy = clamp(1 - runtime.leader.fatigue, 0, 1);
     runtime.staffUsed = 0;
   }
+  ensureIssueLayer(state);
+  state.issueLayer.player.programChangesThisWeek = 0;
 }
 
 function currentMarketingAdvisor(state: GameState) {
