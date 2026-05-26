@@ -17,16 +17,24 @@ type MediaInvitationCardProps = {
 export function MediaInvitationCard({ gameState, invitation, minigameQuestions = [], onDecision, outlet, result }: MediaInvitationCardProps) {
   const reach = Math.round((invitation.expectedReach ?? outlet?.baseReach ?? outlet?.reach ?? 0) * 100);
   const [speakerRole, setSpeakerRole] = useState<SpeakerRole>('leader');
+  const [minigameStarted, setMinigameStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<MediaMiniGameAnswer[]>([]);
   const [secondsLeft, setSecondsLeft] = useState<number | undefined>();
-  const currentQuestion = minigameQuestions[questionIndex];
+  const [soundbiteProblem, setSoundbiteProblem] = useState<MediaMiniGameAnswer | undefined>();
+  const [soundbiteValue, setSoundbiteValue] = useState<MediaMiniGameAnswer | undefined>();
+  const [soundbiteSolution, setSoundbiteSolution] = useState<MediaMiniGameAnswer | undefined>();
+  const currentQuestion = minigameStarted ? minigameQuestions[questionIndex] : undefined;
   const hasMinigame = minigameQuestions.length > 0 && Boolean(invitation.miniGameType);
 
   useEffect(() => {
     setQuestionIndex(0);
     setAnswers([]);
+    setMinigameStarted(false);
     setSecondsLeft(undefined);
+    setSoundbiteProblem(undefined);
+    setSoundbiteValue(undefined);
+    setSoundbiteSolution(undefined);
   }, [invitation.id]);
 
   const speakerOptions = useMemo(
@@ -86,11 +94,37 @@ export function MediaInvitationCard({ gameState, invitation, minigameQuestions =
   }, [currentQuestion?.id, currentQuestion?.timeLimitSec, submitAnswer]);
 
   function acceptWithoutMinigame(role: SpeakerRole) {
+    setSpeakerRole(role);
+    if (hasMinigame) {
+      setMinigameStarted(true);
+      return;
+    }
+
     onDecision({
       action: 'accept',
       invitationId: invitation.id,
       preparationLevel: 'basic',
       speakerRole: role,
+    });
+  }
+
+  function submitSoundbite() {
+    if (!outlet || !soundbiteProblem || !soundbiteValue || !soundbiteSolution) {
+      return;
+    }
+
+    const miniGameResult = scoreMediaMiniGameAnswers([soundbiteProblem, soundbiteValue, soundbiteSolution], minigameQuestions, {
+      invitation,
+      outlet,
+      speakerRole,
+      state: gameState,
+    });
+    onDecision({
+      action: 'accept',
+      invitationId: invitation.id,
+      miniGameResult,
+      preparationLevel: 'basic',
+      speakerRole,
     });
   }
 
@@ -115,6 +149,21 @@ export function MediaInvitationCard({ gameState, invitation, minigameQuestions =
 
         {invitation.resolved ? (
           <SentimentResult result={result} />
+        ) : invitation.miniGameType === 'soundbite_builder' && minigameStarted ? (
+          <View style={styles.minigame}>
+            <Text style={styles.minigameKicker}>Soundbite</Text>
+            <Text style={styles.prompt}>Slozte kratkou odpoved: problem, hodnota, reseni.</Text>
+            <ChipGroup label="Problem" options={soundbiteProblems} selected={soundbiteProblem} onSelect={setSoundbiteProblem} />
+            <ChipGroup label="Hodnota" options={soundbiteValues} selected={soundbiteValue} onSelect={setSoundbiteValue} />
+            <ChipGroup label="Reseni" options={soundbiteSolutions(invitation.issueId)} selected={soundbiteSolution} onSelect={setSoundbiteSolution} />
+            <Pressable
+              disabled={!soundbiteProblem || !soundbiteValue || !soundbiteSolution}
+              onPress={submitSoundbite}
+              style={[styles.submitButton, (!soundbiteProblem || !soundbiteValue || !soundbiteSolution) && styles.disabledButton]}
+            >
+              <Text style={styles.submitText}>Odeslat vystup</Text>
+            </Pressable>
+          </View>
         ) : currentQuestion && hasMinigame ? (
           <View style={styles.minigame}>
             <View style={styles.speakerRow}>
@@ -189,6 +238,31 @@ function SentimentResult({ result }: { result?: MediaAppearanceResult }) {
   );
 }
 
+function ChipGroup({
+  label,
+  onSelect,
+  options,
+  selected,
+}: {
+  label: string;
+  onSelect: (answer: MediaMiniGameAnswer) => void;
+  options: MediaMiniGameAnswer[];
+  selected?: MediaMiniGameAnswer;
+}) {
+  return (
+    <View style={styles.chipGroup}>
+      <Text style={styles.chipLabel}>{label}</Text>
+      <View style={styles.speakerRow}>
+        {options.map((option) => (
+          <Pressable key={option.id} onPress={() => onSelect(option)} style={[styles.speakerChip, selected?.id === option.id && styles.speakerChipActive]}>
+            <Text style={[styles.speakerText, selected?.id === option.id && styles.speakerTextActive]}>{option.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function fallbackAnswer(question: MediaMiniGameQuestion): MediaMiniGameAnswer {
   return (
     question.options.find((answer) => answer.tone === 'vague' || answer.tone === 'evasive') ?? {
@@ -207,6 +281,60 @@ function speakerLabel(role: SpeakerRole) {
   if (role === 'regionalFigure') return 'Regionalni tvar';
   if (role === 'controversialFigure') return 'Ostry host';
   return 'Nova tvar';
+}
+
+const soundbiteProblems: MediaMiniGameAnswer[] = [
+  { id: 'problem-costs', label: 'Naklady', text: 'Lide resi konkretni naklady.', performanceDelta: 0.025, answerType: 'empathy', tone: 'empathetic' },
+  { id: 'problem-chaos', label: 'Chaos', text: 'Problem je nepredvidatelnost pravidel.', performanceDelta: 0.02, answerType: 'explanation', tone: 'specific' },
+  { id: 'problem-blame', label: 'Vinici', text: 'Za problem mohou souperi.', performanceDelta: -0.005, controversyDelta: 0.04, answerType: 'attack', tone: 'aggressive' },
+];
+
+const soundbiteValues: MediaMiniGameAnswer[] = [
+  { id: 'value-fairness', label: 'Ferovost', text: 'Reseni musi byt ferove.', performanceDelta: 0.02, answerType: 'empathy', tone: 'empathetic' },
+  { id: 'value-security', label: 'Jistota', text: 'Cilem je jistota pro domacnosti.', performanceDelta: 0.025, answerType: 'explanation', tone: 'specific' },
+  { id: 'value-freedom', label: 'Svoboda', text: 'Lide potrebuji prostor rozhodovat sami.', performanceDelta: 0.018, answerType: 'explanation', tone: 'technical' },
+];
+
+function soundbiteSolutions(issueId?: string): MediaMiniGameAnswer[] {
+  const topicEffects: Partial<Record<string, Partial<Record<string, number>>>> = {
+    energyPrices: { energyPrices: 1.2 },
+    greenDeal: { greenDeal: 0.75 },
+    housing: { housing: 1.2 },
+    taxes: { taxes: -1.2 },
+  };
+  const impliedIssuePosition = topicEffects[issueId ?? ''];
+  return [
+    {
+      id: 'solution-plan',
+      label: 'Plan',
+      text: 'Ukazeme tri konkretni kroky a termin.',
+      performanceDelta: 0.045,
+      impliedIssuePosition,
+      commitmentStrength: impliedIssuePosition ? 0.58 : 0.25,
+      answerType: 'explanation',
+      tone: 'specific',
+    },
+    {
+      id: 'solution-compromise',
+      label: 'Kompromis',
+      text: 'Najdeme stredni cestu a pojistky.',
+      performanceDelta: 0.025,
+      commitmentStrength: 0.25,
+      answerType: 'pivot',
+      tone: 'evasive',
+    },
+    {
+      id: 'solution-hardline',
+      label: 'Razne',
+      text: 'Prosadime raznou zmenu bez ustupku.',
+      performanceDelta: 0.005,
+      controversyDelta: 0.045,
+      impliedIssuePosition,
+      commitmentStrength: impliedIssuePosition ? 0.72 : 0.35,
+      answerType: 'position',
+      tone: 'aggressive',
+    },
+  ] as MediaMiniGameAnswer[];
 }
 
 const styles = StyleSheet.create({
@@ -294,6 +422,18 @@ const styles = StyleSheet.create({
   },
   declineText: {
     color: colors.accentDark,
+  },
+  chipGroup: {
+    gap: 5,
+  },
+  chipLabel: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  disabledButton: {
+    opacity: 0.45,
   },
   header: {
     alignItems: 'stretch',
@@ -413,6 +553,22 @@ const styles = StyleSheet.create({
   },
   speakerTextActive: {
     color: colors.textOnPrimary,
+  },
+  submitButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.selected,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  submitText: {
+    color: colors.textOnPrimary,
+    fontSize: 12,
+    fontWeight: '900',
   },
   timer: {
     color: colors.accentDark,

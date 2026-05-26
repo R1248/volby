@@ -39,6 +39,36 @@ function soft(topicId: ProgramIssueId, id: string, prompt: string, good: string,
   };
 }
 
+function position(topicId: ProgramIssueId, id: string, prompt: string, options: MediaMiniGameQuestion['options']): MediaMiniGameQuestion {
+  return {
+    formats: ['debate', 'duel', 'interview', 'podcast', 'crisisInterview'],
+    id,
+    miniGameTypes: ['three_questions_timed', 'hostile_interview', 'short_interview', 'long_form'],
+    options,
+    prompt,
+    severity: 'hard',
+    timeLimitSec: 12,
+    topicId,
+  };
+}
+
+function generic(id: string, prompt: string): MediaMiniGameQuestion {
+  return {
+    formats: ['interview', 'debate', 'duel', 'podcast', 'regional', 'expertPanel', 'influencer', 'crisisInterview'],
+    id,
+    isGenericFallback: true,
+    miniGameTypes: ['three_questions_timed', 'short_interview', 'long_form', 'informal_qna', 'hostile_interview', 'soundbite_builder'],
+    options: [
+      { id: 'plan', label: 'Plan', text: 'Ukazat konkretni krok, odpovednost a termin.', performanceDelta: 0.04, answerType: 'explanation', tone: 'specific' },
+      { id: 'costs', label: 'Naklady', text: 'Priznat obavy z nakladu a rict, kdo je ponese.', performanceDelta: 0.035, answerType: 'empathy', tone: 'empathetic' },
+      { id: 'limit', label: 'Limit', text: 'Vymezit hranici kompromisu a co uz strana neudela.', performanceDelta: 0.03, answerType: 'technical', tone: 'technical' },
+    ],
+    prompt,
+    severity: 'normal',
+    topicId: 'taxes',
+  };
+}
+
 export const mediaMiniGameQuestions: MediaMiniGameQuestion[] = [
   hostile('taxes', 'taxes-hostile-gap', 'Kde vezmete penize, kdyz slibujete nizsi dane?', 'Ukazeme kryti ve vydajich a prioritach, ne slib bez rozpoctu.', 'Efektivni stat vse vyresi.', 'Problem jsou rozhazovacni souperi, ne nase dane.'),
   soft('taxes', 'taxes-soft-business', 'Jak vysvetlite dane podnikatelum i zamestnancum?', 'Jednodussi system, stabilni pravidla a zadne skryte zvysovani.', 'Lide potrebuji vedet, kolik jim zustane doma.', 'Dane jsou technicky detail.'),
@@ -69,4 +99,33 @@ export const mediaMiniGameQuestions: MediaMiniGameQuestion[] = [
 
   hostile('lawAndOrder', 'order-hostile-powers', 'Nechcete dat policii prilis velkou moc?', 'Silne pravomoci musi mit dohled, pravidla a meritelny dopad na bezpeci.', 'Bezpecnost je prednejsi nez proces.', 'Kdo se boji policie, pomaha zlocinu.'),
   soft('lawAndOrder', 'order-soft-safety', 'Jak mluvit o poradku bez straseni?', 'Bezpeci je viditelna pritomnost, prevence a duvera, ne jen tvrde tresty.', 'Lide chteji klid v okoli a ferova pravidla pro vsechny.', 'Poradek vyresi represivni slozky.'),
+
+  position('greenDeal', 'green-position-direct', 'Je vase strana pro Green Deal, proti nemu, nebo ho chce reformovat?', [
+    { id: 'reform', label: 'Reformovat', text: 'Reformovat, ne odmitnout: ekologii ano, ale s ochranou cen a prumyslu.', performanceDelta: 0.05, impliedIssuePosition: { greenDeal: 0.75 }, impliedFramingId: { greenDeal: 'reformNotReject' }, commitmentStrength: 0.72, answerType: 'position', consistencyRisk: 0.08, tone: 'specific' },
+    { id: 'reject', label: 'Odmitnout', text: 'Soucasny Green Deal je ohrozeni cen a prumyslu, chceme ho tvrde odmitnout.', performanceDelta: 0.02, impliedIssuePosition: { greenDeal: -2 }, commitmentStrength: 0.86, answerType: 'position', consistencyRisk: 0.14, controversyDelta: 0.04, tone: 'aggressive' },
+    { id: 'support', label: 'Podporit', text: 'Green Deal plne podporujeme jako evropskou modernizaci.', performanceDelta: 0.035, impliedIssuePosition: { greenDeal: 2 }, impliedFramingId: { greenDeal: 'modernization' }, commitmentStrength: 0.9, answerType: 'position', consistencyRisk: 0.14, tone: 'specific' },
+  ]),
+  position('sameSexMarriage', 'marriage-position-direct', 'Podporite manzelstvi pro vsechny?', [
+    { id: 'yes', label: 'Ano', text: 'Ano, rovna prava a pravni jistota pro vsechny rodiny.', performanceDelta: 0.05, impliedIssuePosition: { sameSexMarriage: 2 }, impliedFramingId: { sameSexMarriage: 'equalRights' }, commitmentStrength: 0.86, answerType: 'position', consistencyRisk: 0.12, tone: 'specific' },
+    { id: 'registered', label: 'Partnerstvi', text: 'Registrovane partnerstvi staci, nechceme menit definici manzelstvi.', performanceDelta: 0.02, impliedIssuePosition: { sameSexMarriage: -1 }, commitmentStrength: 0.75, answerType: 'position', consistencyRisk: 0.1, tone: 'technical' },
+    { id: 'compromise', label: 'Kompromis', text: 'Nechci kulturni valku, hledejme pravni kompromis.', performanceDelta: -0.01, impliedIssuePosition: { sameSexMarriage: 0 }, commitmentStrength: 0.35, answerType: 'pivot', consistencyRisk: 0.05, tone: 'evasive' },
+  ]),
+  position('migration', 'migration-position-direct', 'Jste pro zprísneni migracni politiky?', [
+    { id: 'tighten', label: 'Zprisnit', text: 'Ano, vyrazne zprisnit pravidla a zrychlit navraty.', performanceDelta: 0.035, impliedIssuePosition: { migration: 2 }, commitmentStrength: 0.82, answerType: 'position', consistencyRisk: 0.12, tone: 'specific' },
+    { id: 'rules', label: 'Pravidla', text: 'Pravidla, kontrola hranic i integrace musi fungovat soucasne.', performanceDelta: 0.05, impliedIssuePosition: { migration: 0.75 }, commitmentStrength: 0.62, answerType: 'explanation', consistencyRisk: 0.06, tone: 'specific' },
+    { id: 'humanitarian', label: 'Humanitarne', text: 'Dulezity je hlavne humanitarni ramec a ochrana lidi v nouzi.', performanceDelta: 0.02, impliedIssuePosition: { migration: -1 }, commitmentStrength: 0.68, answerType: 'position', consistencyRisk: 0.1, tone: 'empathetic' },
+  ]),
+  position('taxes', 'taxes-position-direct', 'Zvysite dane?', [
+    { id: 'lower', label: 'Ne', text: 'Ne, chceme nizsi a jednodussi dane.', performanceDelta: 0.045, impliedIssuePosition: { taxes: -2 }, commitmentStrength: 0.8, answerType: 'position', consistencyRisk: 0.12, tone: 'specific' },
+    { id: 'selected', label: 'Vybrane', text: 'Jen u vybranych skupin, pokud to bude rozpoctove nutne a ferove.', performanceDelta: 0.025, impliedIssuePosition: { taxes: 0.5, redistribution: 1 }, commitmentStrength: 0.62, answerType: 'explanation', consistencyRisk: 0.08, tone: 'technical' },
+    { id: 'higher', label: 'Vyssi prijmy', text: 'Stat potrebuje vyssi prijmy na sluzby a jistoty.', performanceDelta: 0.01, impliedIssuePosition: { taxes: 2, redistribution: 1.5 }, commitmentStrength: 0.82, answerType: 'position', consistencyRisk: 0.14, tone: 'specific' },
+  ]),
+  position('ukraineSupport', 'ukraine-position-direct', 'Ma pokracovat podpora Ukrajiny?', [
+    { id: 'controlled', label: 'Ano s kontrolou', text: 'Ano, s kontrolou nakladu a jasnym evropskym ramecem.', performanceDelta: 0.05, impliedIssuePosition: { ukraineSupport: 1.25 }, impliedFramingId: { ukraineSupport: 'costControl' }, commitmentStrength: 0.72, answerType: 'position', consistencyRisk: 0.08, tone: 'specific' },
+    { id: 'strong', label: 'Bez vahani', text: 'Ano bez vahani, je to bezpecnostni zajem Ceska.', performanceDelta: 0.04, impliedIssuePosition: { ukraineSupport: 2 }, impliedFramingId: { ukraineSupport: 'westernSecurity' }, commitmentStrength: 0.88, answerType: 'position', consistencyRisk: 0.12, tone: 'specific' },
+    { id: 'limit', label: 'Omezit', text: 'Pomoc je treba omezit a vic hlidat domaci naklady.', performanceDelta: 0.01, impliedIssuePosition: { ukraineSupport: -1.5 }, commitmentStrength: 0.78, answerType: 'position', consistencyRisk: 0.13, tone: 'technical' },
+  ]),
+  generic('generic-concrete-plan', 'Co je vas konkretni plan v tomhle tematu?'),
+  generic('generic-cost-worry', 'Co reknete lidem, kteri se boji nakladu?'),
+  generic('generic-compromise-limit', 'Kde je hranice kompromisu?'),
 ];

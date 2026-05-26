@@ -346,9 +346,15 @@ export type MediaMiniGameType =
   | 'soundbite_builder';
 
 export type MediaMiniGameAnswer = {
+  answerType?: 'position' | 'explanation' | 'attack' | 'pivot' | 'empathy' | 'technical';
   bestForSpeakerRoles?: SpeakerRole[];
+  commitmentStrength?: number;
+  consistencyRisk?: number;
   controversyDelta?: number;
   id: string;
+  impliedFramingId?: Partial<Record<ProgramIssueId, string>>;
+  impliedIssuePosition?: Partial<Record<ProgramIssueId, number>>;
+  impliedIssueSalience?: Partial<Record<ProgramIssueId, number>>;
   issueSalienceDelta?: Partial<Record<ProgramIssueId, number>>;
   label: string;
   performanceDelta: number;
@@ -361,6 +367,7 @@ export type MediaMiniGameAnswer = {
 export type MediaMiniGameQuestion = {
   formats: MediaFormat[];
   id: string;
+  isGenericFallback?: boolean;
   miniGameTypes: MediaMiniGameType[];
   options: MediaMiniGameAnswer[];
   prompt: string;
@@ -371,8 +378,22 @@ export type MediaMiniGameQuestion = {
 
 export type MediaMiniGameResult = {
   controversyAdjustment?: number;
+  impliedProgramEffects?: PendingProgramMediaEffect[];
   performanceMultiplier: number;
+  programAlignmentScore?: number;
+  programMismatchPenalty?: number;
   successScore?: number;
+};
+
+export type PendingProgramMediaEffect = {
+  commitmentStrength: number;
+  consistencyPenalty?: number;
+  framingId?: string;
+  impliedPosition?: number;
+  issueId: ProgramIssueId;
+  positionShift?: number;
+  salienceShift?: number;
+  sourceInvitationId: string;
 };
 
 export type MediaInvitation = {
@@ -433,6 +454,7 @@ export type MediaAppearanceResult = {
   invitationId: string;
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
   partyMomentumDelta: number;
+  programEffects?: PendingProgramMediaEffect[];
   reputationDelta?: Partial<ReputationVector>;
   sentimentLabel?: string;
   sentimentRating?: MediaSentimentRating;

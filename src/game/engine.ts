@@ -471,11 +471,18 @@ export function respondToMediaAppearance(state: GameState, decision: MediaAppear
 
 function withMediaSentiment(result: MediaAppearanceResult, status: NonNullable<MediaAppearanceResult['status']>): MediaAppearanceResult {
   const sentiment = mediaSentimentFromResult(result);
+  const hasMismatch = (result.programEffects ?? []).some((effect) => (effect.consistencyPenalty ?? 0) > 0.04);
+  const hasCommitment = (result.programEffects ?? []).some((effect) => Math.abs(effect.positionShift ?? 0) > 0.08);
+  const programWarning = hasMismatch
+    ? ' Pozor: odpoved je v napeti s aktualnim programem.'
+    : hasCommitment
+    ? ' Verejny zavazek muze posunout vnimani strany.'
+    : '';
   return {
     ...result,
     sentimentLabel: sentiment.label,
     sentimentRating: sentiment.rating,
-    sentimentSummary: sentiment.summary,
+    sentimentSummary: `${sentiment.summary}${programWarning}`,
     status,
   };
 }
@@ -532,6 +539,7 @@ function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceRes
 
   applyReputationDelta(runtime.reputation, appliedResult.reputationDelta);
   applyMediaIssueSalience(state, appliedResult.issueSalienceDelta);
+  applyProgramMediaEffects(state, appliedResult);
   runtime.field.amplitude = clamp(runtime.field.amplitude + appliedResult.partyMomentumDelta * 0.8, 0.35, 1.8);
   runtime.momentum = clamp((runtime.momentum ?? 0.5) + appliedResult.partyMomentumDelta, 0, 1);
 
@@ -573,6 +581,56 @@ function applyMediaIssueSalience(state: GameState, issueSalienceDelta: MediaAppe
     };
   }
 
+  state.issueLayer = recalculateIssueLayer(
+    {
+      ...state.issueLayer,
+      player: {
+        ...state.issueLayer.player,
+        currentIssuePositions,
+      },
+    },
+    state.partyRuntime.player.field.flexibility,
+  );
+  applyIssueLayerToPlayer(state);
+}
+
+function applyProgramMediaEffects(state: GameState, result: MediaAppearanceResult) {
+  const effects = result.programEffects ?? [];
+  if (effects.length === 0) {
+    return;
+  }
+
+  ensureIssueLayer(state);
+  const currentIssuePositions = { ...state.issueLayer.player.currentIssuePositions };
+  let changed = false;
+  let consistencyPenalty = 0;
+
+  for (const effect of effects) {
+    const current = currentIssuePositions[effect.issueId];
+    if (!current) {
+      continue;
+    }
+
+    currentIssuePositions[effect.issueId] = {
+      ...current,
+      framingId: effect.framingId ?? current.framingId,
+      position: clamp(current.position + (effect.positionShift ?? 0), -2, 2),
+      rigidity: clamp(current.rigidity + effect.commitmentStrength * 0.025, 0, 1),
+      salience: clamp(current.salience + (effect.salienceShift ?? 0), 0, 4),
+    };
+    consistencyPenalty += effect.consistencyPenalty ?? 0;
+    changed = true;
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  state.partyRuntime.player.reputation.consistency = clamp(
+    state.partyRuntime.player.reputation.consistency - consistencyPenalty,
+    0,
+    1,
+  );
   state.issueLayer = recalculateIssueLayer(
     {
       ...state.issueLayer,

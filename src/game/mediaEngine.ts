@@ -196,6 +196,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     invitationId: invitation.id,
     issueSalienceDelta,
     partyMomentumDelta: round4(weightedImpact * 6 - (controversyTriggered ? 0.025 : 0)),
+    programEffects: decision.miniGameResult?.impliedProgramEffects ?? [],
     reputationDelta: reputationDeltaFor(speakerRole, successScore, controversyTriggered, speakerProfile.competenceMultiplier),
     successScore: round4(successScore),
     summary: `${outlet.name}: ${speakerRoleProfiles[speakerRole].name} v formatu ${formatProfile.name} ${successScore >= 0.55 ? 'posilil medialni vykon' : 'mel omezeny efekt'}${controversyTriggered ? ' a vyvolal kontroverzi' : ''}.`,
@@ -251,7 +252,7 @@ export function selectMediaMiniGameQuestions(
   }
 
   const format = normalizeFormat(invitation.format);
-  const topicId = invitation.issueId ?? invitation.issue;
+  const topicId = invitation.issueId ?? programTopicFromLegacy(invitation.issue);
   const risk = Math.max(invitation.risk, outlet.scrutiny * 0.7, outlet.sensationalism * 0.6);
   const preferredSeverities =
     miniGameType === 'hostile_interview'
@@ -274,15 +275,16 @@ export function selectMediaMiniGameQuestions(
         : 2
       : 3;
   const shouldBeTimed = miniGameType === 'three_questions_timed' || miniGameType === 'hostile_interview';
-  const fallbackTopic = state.issueLayer.issues.find((issue) => issue.defaultSalience > 0.7)?.id ?? topicId;
   const pool = mediaMiniGameQuestions
-    .filter((question) => question.topicId === topicId || question.topicId === fallbackTopic)
+    .filter((question) => question.topicId === topicId || question.isGenericFallback)
     .filter((question) => question.miniGameTypes.includes(miniGameType) || question.formats.includes(format))
     .sort((a, b) => severityRank(preferredSeverities, a.severity) - severityRank(preferredSeverities, b.severity));
   const selected = uniqueQuestions(pool, count);
 
   return selected.map((question, index) => ({
     ...question,
+    prompt: question.isGenericFallback ? `${question.prompt} (${issueName(state, topicId)})` : question.prompt,
+    topicId: question.isGenericFallback ? topicId : question.topicId,
     timeLimitSec: shouldBeTimed
       ? clamp(Math.round((miniGameType === 'hostile_interview' ? 8 : 10) + index * 2 + Math.max(0, 0.7 - risk) * 4), 8, miniGameType === 'hostile_interview' ? 15 : 18)
       : miniGameType === 'short_interview' && risk > 0.58
@@ -307,21 +309,33 @@ export function scoreMediaMiniGameAnswers(
 
   let performance = 0;
   let controversy = 0;
+  let programAlignment = 0;
+  let programMismatch = 0;
+  const impliedProgramEffects: MediaMiniGameResult['impliedProgramEffects'] = [];
   for (let index = 0; index < questions.length; index += 1) {
     const question = questions[index];
     const answer = answers[index] ?? vagueAnswer(question);
     const speakerFit = answer.bestForSpeakerRoles?.includes(context.speakerRole ?? 'leader') ? 0.025 : 0;
     const positionFit = answerPositionFit(answer, question.topicId, context.state);
     const outletRiskPenalty = (answer.tone === 'aggressive' ? context.outlet.sensationalism * 0.035 : 0) + (answer.tone === 'vague' || answer.tone === 'evasive' ? context.outlet.scrutiny * 0.025 : 0);
-    performance += answer.performanceDelta + speakerFit + positionFit - outletRiskPenalty;
+    const commitment = evaluateProgramCommitment(answer, question, context);
+    const directPositionQuestion = question.options.some((option) => option.impliedIssuePosition);
+    const evasivePenalty = directPositionQuestion && (answer.answerType === 'pivot' || answer.tone === 'evasive') ? 0.045 : 0;
+    performance += answer.performanceDelta + speakerFit + positionFit + commitment.performanceAdjustment - outletRiskPenalty - evasivePenalty;
     controversy += (answer.controversyDelta ?? 0) + (answer.tone === 'aggressive' ? 0.02 : 0) - (answer.tone === 'empathetic' ? 0.01 : 0);
+    programAlignment += commitment.alignmentScore;
+    programMismatch += commitment.mismatchPenalty;
+    impliedProgramEffects.push(...commitment.effects);
   }
 
   const averagePerformance = performance / Math.max(1, questions.length);
   const averageControversy = controversy / Math.max(1, questions.length);
   return {
     controversyAdjustment: round4(clamp(averageControversy, -0.06, 0.1)),
+    impliedProgramEffects,
     performanceMultiplier: round4(clamp(1 + averagePerformance, 0.75, 1.2)),
+    programAlignmentScore: round4(programAlignment / Math.max(1, questions.length)),
+    programMismatchPenalty: round4(programMismatch),
     successScore: round4(clamp(0.5 + averagePerformance * 1.6 - Math.max(0, averageControversy) * 0.5, 0, 1)),
   };
 }
@@ -399,16 +413,6 @@ function uniqueQuestions(questions: readonly MediaMiniGameQuestion[], count: num
   if (selected.length >= count) {
     return selected;
   }
-
-  for (const question of mediaMiniGameQuestions) {
-    if (!seen.has(question.id)) {
-      seen.add(question.id);
-      selected.push(question);
-    }
-    if (selected.length >= count) {
-      break;
-    }
-  }
   return selected;
 }
 
@@ -422,6 +426,71 @@ function vagueAnswer(question: MediaMiniGameQuestion): MediaMiniGameAnswer {
       tone: 'vague',
     }
   );
+}
+
+function evaluateProgramCommitment(
+  answer: MediaMiniGameAnswer,
+  question: MediaMiniGameQuestion,
+  context: {
+    invitation: MediaInvitation;
+    outlet: MediaOutlet;
+    speakerRole?: SpeakerRole;
+    state: GameState;
+  },
+) {
+  const reach = context.invitation.expectedReach ?? context.outlet.baseReach ?? context.outlet.reach;
+  const formatRisk = context.outlet.scrutiny * 0.7 + context.outlet.sensationalism * 0.3 + context.invitation.risk * 0.4;
+  const effects: NonNullable<MediaMiniGameResult['impliedProgramEffects']> = [];
+  let alignmentScore = 0;
+  let mismatchPenalty = 0;
+  let performanceAdjustment = 0;
+
+  for (const [issueId, impliedPosition] of Object.entries(answer.impliedIssuePosition ?? {}) as [ProgramIssueId, number][]) {
+    const current = context.state.issueLayer.player.currentIssuePositions[issueId];
+    if (!current) {
+      continue;
+    }
+
+    const commitmentStrength = clamp(answer.commitmentStrength ?? 0.45, 0, 1);
+    const difference = Math.abs(impliedPosition - current.position);
+    const exposure = commitmentStrength * reach * (0.45 + formatRisk * 0.55) * (0.55 + current.salience / 8) * (0.65 + current.rigidity * 0.55);
+    const aligned = difference <= 0.65;
+    const moderateMismatch = difference > 0.65 && difference <= 1.4;
+    const mismatch = difference > 1.4;
+    const issuePenalty = (moderateMismatch ? difference * 0.035 : mismatch ? difference * 0.075 : -0.018) * exposure + (answer.consistencyRisk ?? 0) * (mismatch ? 0.35 : moderateMismatch ? 0.16 : 0);
+
+    if (aligned) {
+      alignmentScore += 0.035 * exposure;
+      performanceAdjustment += 0.018 * exposure;
+    } else {
+      mismatchPenalty += issuePenalty;
+      performanceAdjustment -= issuePenalty;
+    }
+
+    if (answer.answerType !== 'pivot' && commitmentStrength >= 0.55 && reach >= 0.25) {
+      effects.push({
+        commitmentStrength,
+        consistencyPenalty: Math.max(0, issuePenalty * 0.35),
+        framingId: answer.impliedFramingId?.[issueId],
+        impliedPosition,
+        issueId,
+        positionShift: clamp((impliedPosition - current.position) * commitmentStrength * reach * 0.15, -0.35, 0.35),
+        salienceShift: clamp((answer.impliedIssueSalience?.[issueId] ?? (reach >= 0.55 ? 0.22 : 0.1)) * commitmentStrength, 0, 0.3),
+        sourceInvitationId: context.invitation.id,
+      });
+    }
+  }
+
+  if (answer.answerType === 'pivot' || answer.tone === 'evasive') {
+    performanceAdjustment -= 0.025 * (0.8 + context.outlet.scrutiny);
+  }
+
+  return {
+    alignmentScore,
+    effects,
+    mismatchPenalty,
+    performanceAdjustment,
+  };
 }
 
 function answerPositionFit(answer: MediaMiniGameAnswer, topicId: ProgramIssueId, state: GameState) {
@@ -440,6 +509,10 @@ function answerPositionFit(answer: MediaMiniGameAnswer, topicId: ProgramIssueId,
     return position.rigidity > 0.55 ? 0.006 : -0.006;
   }
   return -0.008;
+}
+
+function issueName(state: GameState, issueId: ProgramIssueId) {
+  return state.issueLayer.issues.find((issue) => issue.id === issueId)?.shortName ?? issueId;
 }
 
 function toInvitation(template: MediaInvitationTemplate, week: number): MediaInvitation {

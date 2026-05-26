@@ -15,6 +15,7 @@ import {
   updateProgramIssue,
 } from '../src/game/engine';
 import { mediaOutlets } from '../src/data/mediaOutlets';
+import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
 import { scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
 import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
@@ -128,6 +129,14 @@ assert(
   !readFileSync('src/components/media/MediaInvitationCard.tsx', 'utf8').includes('supportDelta'),
   'Immediate media UI must not show exact support deltas',
 );
+const mediaCardSource = readFileSync('src/components/media/MediaInvitationCard.tsx', 'utf8');
+assert(mediaCardSource.includes('minigameStarted'), 'Media card should not start minigame before explicit accept');
+assert(mediaCardSource.includes("action: 'decline'"), 'Decline should remain available before minigame starts');
+assert(mediaCardSource.includes('currentQuestion = minigameStarted'), 'Timed questions should start only after minigame starts');
+assert(
+  mediaCardSource.includes('ChipGroup') && mediaCardSource.includes('Problem') && mediaCardSource.includes('Hodnota') && mediaCardSource.includes('Reseni'),
+  'soundbite_builder should use real chip UI',
+);
 
 const publicDebateOutlet = mediaOutlets.find((outlet) => outlet.id === 'public_tv_main_debate');
 const toxicOutlet = mediaOutlets.find((outlet) => outlet.id === 'anti_establishment_channel');
@@ -161,6 +170,18 @@ const hostileQuestions = selectMediaMiniGameQuestions(highReachDebate, publicDeb
 assert(hostileQuestions.length === 3, 'three_questions_timed should select three questions');
 assert(hostileQuestions.every((question) => question.topicId === 'taxes' || question.timeLimitSec), 'Selected questions should match topic/format risk');
 assert(hostileQuestions.every((question) => (question.timeLimitSec ?? 0) >= 10 && (question.timeLimitSec ?? 0) <= 18), 'Timed debate questions should have 10-18 second limits');
+assert(
+  hostileQuestions.every((question) => question.topicId === 'taxes' || question.isGenericFallback),
+  'Taxes invitation must not receive unrelated off-topic fallback questions',
+);
+const genericOnlyInvitation = testInvitation('generic-only', 'serious_newspaper_interview', 'civilServiceReform', 'interview', 0.42, 0.3, 'short_interview');
+const seriousNewspaper = mediaOutlets.find((outlet) => outlet.id === 'serious_newspaper_interview');
+assert(seriousNewspaper, 'Expected serious newspaper outlet');
+const genericOnlyQuestions = selectMediaMiniGameQuestions(genericOnlyInvitation, seriousNewspaper, declineState);
+assert(
+  genericOnlyQuestions.every((question) => question.topicId === 'civilServiceReform' && question.isGenericFallback),
+  'When topic-specific questions are missing, selector should return generic fallback only',
+);
 
 const longFormInvitation = testInvitation('long-form', 'business_podcast', 'taxes', 'podcast', 0.31, 0.32, 'long_form');
 const businessPodcast = mediaOutlets.find((outlet) => outlet.id === 'business_podcast');
@@ -187,6 +208,82 @@ const weakMiniGame = scoreMediaMiniGameAnswers(
   { invitation: highReachDebate, outlet: publicDebateOutlet, speakerRole: 'leader', state: declineState },
 );
 assert(strongMiniGame.performanceMultiplier > weakMiniGame.performanceMultiplier, 'Minigame answers should change performanceMultiplier');
+
+const greenPositionQuestion = mediaMiniGameQuestions.find((question) => question.id === 'green-position-direct');
+assert(greenPositionQuestion, 'Expected explicit Green Deal position question');
+const greenSupportAnswer = greenPositionQuestion.options.find((answer) => answer.id === 'support');
+const greenRejectAnswer = greenPositionQuestion.options.find((answer) => answer.id === 'reject');
+assert(greenSupportAnswer && greenRejectAnswer, 'Expected Green Deal position answers');
+const greenAlignedState = updateProgramIssue(baseState, 'greenDeal', { position: 2, salience: 4 });
+const greenContradictState = updateProgramIssue(baseState, 'greenDeal', { position: 2, salience: 4 });
+const greenDebate = testInvitation('green-commitment', publicDebateOutlet.id, 'greenDeal', 'debate', 0.82, 0.62, 'three_questions_timed');
+const alignedProgramResult = scoreMediaMiniGameAnswers([greenSupportAnswer], [greenPositionQuestion], {
+  invitation: greenDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: greenAlignedState,
+});
+const mismatchProgramResult = scoreMediaMiniGameAnswers([greenRejectAnswer], [greenPositionQuestion], {
+  invitation: greenDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: greenContradictState,
+});
+assert(
+  (alignedProgramResult.programMismatchPenalty ?? 0) < 0.01,
+  'Aligned position answer should not create meaningful program mismatch penalty',
+);
+assert(
+  (mismatchProgramResult.programMismatchPenalty ?? 0) > (alignedProgramResult.programMismatchPenalty ?? 0),
+  'Contradicting position answer should create programMismatchPenalty',
+);
+assert(
+  (mismatchProgramResult.impliedProgramEffects ?? []).some((effect) => effect.issueId === 'greenDeal' && (effect.consistencyPenalty ?? 0) > 0),
+  'Strong contradiction in high-reach debate should create pending program effect or consistency penalty',
+);
+
+const commitmentState = initializeComputedState({
+  ...greenContradictState,
+  mediaInvitations: [greenDebate],
+});
+const commitmentPending = respondToMediaAppearance(commitmentState, {
+  action: 'accept',
+  invitationId: greenDebate.id,
+  miniGameResult: mismatchProgramResult,
+  preparationLevel: 'basic',
+  speakerRole: 'leader',
+});
+assert(
+  commitmentPending.issueLayer.player.currentIssuePositions.greenDeal.position === commitmentState.issueLayer.player.currentIssuePositions.greenDeal.position,
+  'Pending program effects must not apply immediately',
+);
+assert(JSON.stringify(commitmentPending.nationalSupport) === JSON.stringify(commitmentState.nationalSupport), 'Media minigame still must not immediately change support');
+const commitmentResolved = resolveTurn(commitmentPending, [], 112).state;
+const positionShift = Math.abs(
+  commitmentResolved.issueLayer.player.currentIssuePositions.greenDeal.position - commitmentState.issueLayer.player.currentIssuePositions.greenDeal.position,
+);
+assert(positionShift > 0, 'resolveTurn should apply pending program/media effects');
+assert(positionShift <= 0.36, `Explicit answer should shift issue position conservatively, got ${positionShift}`);
+
+const marriageQuestion = mediaMiniGameQuestions.find((question) => question.id === 'marriage-position-direct');
+const marriagePivot = marriageQuestion?.options.find((answer) => answer.id === 'compromise');
+const marriageExplicit = marriageQuestion?.options.find((answer) => answer.id === 'yes');
+assert(marriageQuestion && marriagePivot && marriageExplicit, 'Expected marriage position answers');
+const pivotResult = scoreMediaMiniGameAnswers([marriagePivot], [marriageQuestion], {
+  invitation: testInvitation('marriage-pivot', publicDebateOutlet.id, 'sameSexMarriage', 'debate', 0.82, 0.62, 'three_questions_timed'),
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: baseState,
+});
+const explicitResult = scoreMediaMiniGameAnswers([marriageExplicit], [marriageQuestion], {
+  invitation: testInvitation('marriage-explicit', publicDebateOutlet.id, 'sameSexMarriage', 'debate', 0.82, 0.62, 'three_questions_timed'),
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: baseState,
+});
+assert(pivotResult.performanceMultiplier < explicitResult.performanceMultiplier, 'Evasive answer to direct position question should lower performance');
+assert((pivotResult.impliedProgramEffects ?? []).length === 0, 'Evasive answer should not shift issue position');
+
 const miniGamePending = respondToMediaAppearance(declineState, {
   action: 'accept',
   invitationId: highReachDebate.id,
