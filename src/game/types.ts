@@ -342,7 +342,38 @@ export type MediaMiniGameType =
   | 'short_interview'
   | 'long_form'
   | 'informal_qna'
-  | 'hostile_interview';
+  | 'hostile_interview'
+  | 'soundbite_builder';
+
+export type MediaMiniGameAnswer = {
+  bestForSpeakerRoles?: SpeakerRole[];
+  controversyDelta?: number;
+  id: string;
+  issueSalienceDelta?: Partial<Record<ProgramIssueId, number>>;
+  label: string;
+  performanceDelta: number;
+  reputationDelta?: Partial<ReputationVector>;
+  riskyForClusters?: SegmentId[];
+  text: string;
+  tone?: 'specific' | 'vague' | 'aggressive' | 'empathetic' | 'technical' | 'evasive';
+};
+
+export type MediaMiniGameQuestion = {
+  formats: MediaFormat[];
+  id: string;
+  miniGameTypes: MediaMiniGameType[];
+  options: MediaMiniGameAnswer[];
+  prompt: string;
+  severity: 'soft' | 'normal' | 'hard' | 'hostile';
+  timeLimitSec?: number;
+  topicId: ProgramIssueId;
+};
+
+export type MediaMiniGameResult = {
+  controversyAdjustment?: number;
+  performanceMultiplier: number;
+  successScore?: number;
+};
 
 export type MediaInvitation = {
   id: string;
@@ -379,10 +410,7 @@ export type VoterCluster = {
 export type MediaAppearanceDecision = {
   invitationId: string;
   action: 'decline' | 'accept';
-  miniGameResult?: {
-    performanceMultiplier: number;
-    successScore?: number;
-  };
+  miniGameResult?: MediaMiniGameResult;
   preparationLevel: MediaPreparationLevel;
   speakerRole?: SpeakerRole;
 };
@@ -409,6 +437,7 @@ export type MediaAppearanceResult = {
   sentimentLabel?: string;
   sentimentRating?: MediaSentimentRating;
   sentimentSummary?: string;
+  sentimentStatus?: 'rated' | 'declined';
   status?: 'pending' | 'applied';
   successScore: number;
   summary: string;

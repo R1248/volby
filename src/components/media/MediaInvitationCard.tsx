@@ -1,17 +1,98 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { MediaAppearanceDecision, MediaAppearanceResult, MediaInvitation, MediaOutlet } from '@/src/game/types';
+import { scoreMediaMiniGameAnswers } from '@/src/game/mediaEngine';
+import type { GameState, MediaAppearanceDecision, MediaAppearanceResult, MediaInvitation, MediaMiniGameAnswer, MediaMiniGameQuestion, MediaOutlet, SpeakerRole } from '@/src/game/types';
 import { colors } from '@/src/theme/colors';
 
 type MediaInvitationCardProps = {
+  gameState: GameState;
   invitation: MediaInvitation;
+  minigameQuestions?: MediaMiniGameQuestion[];
   onDecision: (decision: MediaAppearanceDecision) => void;
   outlet?: MediaOutlet;
   result?: MediaAppearanceResult;
 };
 
-export function MediaInvitationCard({ invitation, onDecision, outlet, result }: MediaInvitationCardProps) {
+export function MediaInvitationCard({ gameState, invitation, minigameQuestions = [], onDecision, outlet, result }: MediaInvitationCardProps) {
   const reach = Math.round((invitation.expectedReach ?? outlet?.baseReach ?? outlet?.reach ?? 0) * 100);
+  const [speakerRole, setSpeakerRole] = useState<SpeakerRole>('leader');
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answers, setAnswers] = useState<MediaMiniGameAnswer[]>([]);
+  const [secondsLeft, setSecondsLeft] = useState<number | undefined>();
+  const currentQuestion = minigameQuestions[questionIndex];
+  const hasMinigame = minigameQuestions.length > 0 && Boolean(invitation.miniGameType);
+
+  useEffect(() => {
+    setQuestionIndex(0);
+    setAnswers([]);
+    setSecondsLeft(undefined);
+  }, [invitation.id]);
+
+  const speakerOptions = useMemo(
+    () =>
+      (invitation.recommendedSpeakerRoles?.length ? invitation.recommendedSpeakerRoles : ['leader', 'regionalFigure']).filter(
+        (role, index, roles) => roles.indexOf(role) === index,
+      ),
+    [invitation.recommendedSpeakerRoles],
+  );
+
+  const submitAnswer = useCallback((answer: MediaMiniGameAnswer | undefined) => {
+    if (!currentQuestion || !outlet) {
+      return;
+    }
+
+    const nextAnswers = [...answers, answer ?? fallbackAnswer(currentQuestion)];
+    if (nextAnswers.length >= minigameQuestions.length) {
+      const miniGameResult = scoreMediaMiniGameAnswers(nextAnswers, minigameQuestions, {
+        invitation,
+        outlet,
+        speakerRole,
+        state: gameState,
+      });
+      onDecision({
+        action: 'accept',
+        invitationId: invitation.id,
+        miniGameResult,
+        preparationLevel: 'basic',
+        speakerRole,
+      });
+      return;
+    }
+
+    setAnswers(nextAnswers);
+    setQuestionIndex((index) => index + 1);
+  }, [answers, currentQuestion, gameState, invitation, minigameQuestions, onDecision, outlet, speakerRole]);
+
+  useEffect(() => {
+    if (!currentQuestion?.timeLimitSec) {
+      setSecondsLeft(undefined);
+      return undefined;
+    }
+
+    setSecondsLeft(currentQuestion.timeLimitSec);
+    const timer = setInterval(() => {
+      setSecondsLeft((current) => {
+        if (current === undefined || current <= 1) {
+          clearInterval(timer);
+          submitAnswer(undefined);
+          return undefined;
+        }
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentQuestion?.id, currentQuestion?.timeLimitSec, submitAnswer]);
+
+  function acceptWithoutMinigame(role: SpeakerRole) {
+    onDecision({
+      action: 'accept',
+      invitationId: invitation.id,
+      preparationLevel: 'basic',
+      speakerRole: role,
+    });
+  }
 
   return (
     <View style={styles.card}>
@@ -33,17 +114,35 @@ export function MediaInvitationCard({ invitation, onDecision, outlet, result }: 
         </View>
 
         {invitation.resolved ? (
-          <View style={styles.sentimentBox}>
-            <Text style={styles.resolved}>Pozvanka vyresena</Text>
-            {result?.sentimentRating ? (
-              <>
-                <Text style={styles.sentimentTitle}>
-                  Medialni sentiment: {result.sentimentRating}/5 ({result.sentimentLabel}) {result.status === 'pending' ? 'ceka' : 'zapocteno'}
-                </Text>
-                <Text style={styles.sentimentText}>{result.sentimentSummary}</Text>
-                <Text style={styles.sentimentHint}>Presny dopad se projevi v tydennim vyhodnoceni.</Text>
-              </>
-            ) : null}
+          <SentimentResult result={result} />
+        ) : currentQuestion && hasMinigame ? (
+          <View style={styles.minigame}>
+            <View style={styles.speakerRow}>
+              {speakerOptions.map((role) => (
+                <Pressable
+                  key={role}
+                  onPress={() => setSpeakerRole(role)}
+                  style={[styles.speakerChip, speakerRole === role && styles.speakerChipActive]}
+                >
+                  <Text style={[styles.speakerText, speakerRole === role && styles.speakerTextActive]}>{speakerLabel(role)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.minigameHeader}>
+              <Text style={styles.minigameKicker}>
+                {invitation.miniGameType === 'soundbite_builder' ? 'Soundbite' : 'Otazka'} {questionIndex + 1}/{minigameQuestions.length}
+              </Text>
+              {secondsLeft !== undefined ? <Text style={styles.timer}>{secondsLeft}s</Text> : null}
+            </View>
+            <Text style={styles.prompt}>{currentQuestion.prompt}</Text>
+            <View style={styles.optionStack}>
+              {currentQuestion.options.map((answer) => (
+                <Pressable key={answer.id} onPress={() => submitAnswer(answer)} style={styles.answerOption}>
+                  <Text style={styles.answerLabel}>{answer.label}</Text>
+                  <Text style={styles.answerText}>{answer.text}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         ) : (
           <View style={styles.actions}>
@@ -53,37 +152,61 @@ export function MediaInvitationCard({ invitation, onDecision, outlet, result }: 
             >
               <Text style={[styles.actionText, styles.declineText]}>Odmitnout</Text>
             </Pressable>
-            <Pressable
-              onPress={() =>
-                onDecision({
-                  action: 'accept',
-                  invitationId: invitation.id,
-                  preparationLevel: 'basic',
-                  speakerRole: 'leader',
-                })
-              }
-              style={[styles.action, styles.accept]}
-            >
-              <Text style={styles.acceptText}>Predseda</Text>
-            </Pressable>
-            <Pressable
-              onPress={() =>
-                onDecision({
-                  action: 'accept',
-                  invitationId: invitation.id,
-                  preparationLevel: 'basic',
-                  speakerRole: 'regionalFigure',
-                })
-              }
-              style={[styles.action, styles.acceptAlt]}
-            >
-              <Text style={styles.acceptText}>Regionalni tvar</Text>
-            </Pressable>
+            {speakerOptions.map((role) => (
+              <Pressable
+                key={role}
+                onPress={() => acceptWithoutMinigame(role)}
+                style={[styles.action, role === 'leader' ? styles.accept : styles.acceptAlt]}
+              >
+                <Text style={styles.acceptText}>{speakerLabel(role)}</Text>
+              </Pressable>
+            ))}
           </View>
         )}
       </View>
     </View>
   );
+}
+
+function SentimentResult({ result }: { result?: MediaAppearanceResult }) {
+  const sentimentTitle = result?.sentimentRating
+    ? `Medialni sentiment: ${result.sentimentRating}/5 (${result.sentimentLabel})`
+    : `Medialni sentiment: ${result?.sentimentLabel ?? 'Vyreseno'}`;
+
+  return (
+    <View style={styles.sentimentBox}>
+      <Text style={styles.resolved}>Pozvanka vyresena</Text>
+      {result?.sentimentLabel ? (
+        <>
+          <Text style={styles.sentimentTitle}>
+            {sentimentTitle} {result.status === 'pending' ? 'ceka' : 'zapocteno'}
+          </Text>
+          <Text style={styles.sentimentText}>{result.sentimentSummary}</Text>
+          <Text style={styles.sentimentHint}>Presny dopad se projevi v tydennim vyhodnoceni.</Text>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function fallbackAnswer(question: MediaMiniGameQuestion): MediaMiniGameAnswer {
+  return (
+    question.options.find((answer) => answer.tone === 'vague' || answer.tone === 'evasive') ?? {
+      id: 'timeout',
+      label: 'Bez odpovedi',
+      performanceDelta: -0.08,
+      text: 'Bez konkretni odpovedi.',
+      tone: 'vague',
+    }
+  );
+}
+
+function speakerLabel(role: SpeakerRole) {
+  if (role === 'leader') return 'Predseda';
+  if (role === 'expert') return 'Expert';
+  if (role === 'regionalFigure') return 'Regionalni tvar';
+  if (role === 'controversialFigure') return 'Ostry host';
+  return 'Nova tvar';
 }
 
 const styles = StyleSheet.create({
@@ -94,7 +217,7 @@ const styles = StyleSheet.create({
   acceptAlt: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
-    flex: 1.25,
+    flex: 1.1,
   },
   acceptText: {
     color: colors.textOnPrimary,
@@ -119,8 +242,28 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 10,
+  },
+  answerLabel: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  answerOption: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 8,
+  },
+  answerText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 15,
+    marginTop: 2,
   },
   body: {
     flex: 1,
@@ -162,6 +305,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  minigame: {
+    gap: 8,
+    marginTop: 10,
+  },
+  minigameHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  minigameKicker: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  optionStack: {
+    gap: 6,
+  },
+  prompt: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 18,
   },
   reach: {
     alignItems: 'center',
@@ -221,6 +388,36 @@ const styles = StyleSheet.create({
   signal: {
     backgroundColor: colors.accent,
     width: 5,
+  },
+  speakerChip: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  speakerChipActive: {
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.selected,
+  },
+  speakerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  speakerText: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  speakerTextActive: {
+    color: colors.textOnPrimary,
+  },
+  timer: {
+    color: colors.accentDark,
+    fontSize: 12,
+    fontWeight: '900',
   },
   title: {
     color: colors.text,

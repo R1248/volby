@@ -1,10 +1,14 @@
 import { mediaInvitationTemplates, mediaOutlets, voterClusters, type MediaInvitationTemplate } from '../data/mediaOutlets';
+import { mediaMiniGameQuestions } from '../data/mediaMiniGameQuestions';
 import type { ProgramIssueId } from './issueTypes';
 import type {
   GameState,
   IssueId,
   MediaAppearanceDecision,
   MediaAppearanceResult,
+  MediaMiniGameAnswer,
+  MediaMiniGameQuestion,
+  MediaMiniGameResult,
   MediaFormat,
   MediaInvitation,
   MediaOutlet,
@@ -110,16 +114,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
   }
 
   if (decision.action === 'decline') {
-    return {
-      clusterImpacts: [],
-      controversyTriggered: false,
-      invitationId: invitation.id,
-      issueSalienceDelta: {},
-      partyMomentumDelta: -0.005,
-      reputationDelta: { authenticity: -0.006, trust: -0.004 },
-      successScore: 0,
-      summary: `${outlet.name}: pozvanka odmitnuta, bez primeho medialniho zasahu.`,
-    };
+    return declineMediaResult(invitation, outlet);
   }
 
   const format = normalizeFormat(invitation.format);
@@ -134,7 +129,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     speakerProfile.authenticityByFormat[format] * (invitation.recommendedSpeakerRoles?.includes(speakerRole) ? 1.08 : 0.88);
   const credibilityMultiplier = 0.65 + outlet.credibility * 0.7;
   const expectedReach = (invitation.expectedReach ?? outlet.baseReach ?? outlet.reach) * speakerProfile.reachMultiplier;
-  const topicId = invitation.issueId ?? invitation.issue;
+  const topicId = invitation.issueId ?? programTopicFromLegacy(invitation.issue);
 
   const clusterImpacts = voterClusters.map((cluster) => {
     const audienceByCluster = outlet.audienceByCluster as Partial<Record<string, number>> | undefined;
@@ -174,9 +169,23 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
   }, 0);
   const positiveImpact = clusterImpacts.reduce((sum, impact) => sum + Math.max(0, impact.supportDelta), 0);
   const negativeImpact = clusterImpacts.reduce((sum, impact) => sum + Math.min(0, impact.supportDelta), 0);
-  const riskScore = effectiveRisk(invitation, outlet, speakerRole, format, decision.preparationLevel, performanceMultiplier);
+  const riskScore = clamp(
+    effectiveRisk(invitation, outlet, speakerRole, format, decision.preparationLevel, performanceMultiplier) +
+      (decision.miniGameResult?.controversyAdjustment ?? 0),
+    0,
+    1,
+  );
   const controversyTriggered = riskScore > 0.72;
-  const successScore = clamp(0.5 + weightedImpact * 18 + positiveImpact * 0.8 + negativeImpact * 1.4 - (controversyTriggered ? 0.18 : 0), 0, 1);
+  const successScore = clamp(
+    0.5 +
+      weightedImpact * 18 +
+      positiveImpact * 0.8 +
+      negativeImpact * 1.4 +
+      ((decision.miniGameResult?.successScore ?? 0.5) - 0.5) * 0.18 -
+      (controversyTriggered ? 0.18 : 0),
+    0,
+    1,
+  );
   const issueSalienceDelta = {
     [topicId]: round4(0.12 * formatProfile.salienceMultiplier * (invitation.expectedReach ?? outlet.reach) * (controversyTriggered ? 1.3 : 1)),
   };
@@ -195,9 +204,17 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
 
 export function mediaSentimentFromResult(result: MediaAppearanceResult): {
   label: string;
-  rating: MediaSentimentRating;
+  rating?: MediaSentimentRating;
   summary: string;
 } {
+  if (result.sentimentStatus === 'declined') {
+    return {
+      label: 'Odmítnuto',
+      rating: result.sentimentRating,
+      summary: result.sentimentSummary ?? 'Pozvanka byla odmitnuta; realny dopad se projevi az v tydennim vyhodnoceni.',
+    };
+  }
+
   const adjusted = result.successScore - (result.controversyTriggered ? 0.12 : 0);
   const rating: MediaSentimentRating =
     adjusted < 0.25 ? 1 : adjusted < 0.43 ? 2 : adjusted < 0.58 ? 3 : adjusted < 0.76 ? 4 : 5;
@@ -221,6 +238,208 @@ export function mediaSentimentFromResult(result: MediaAppearanceResult): {
     rating,
     summary: summaries[rating],
   };
+}
+
+export function selectMediaMiniGameQuestions(
+  invitation: MediaInvitation,
+  outlet: MediaOutlet,
+  state: GameState,
+): MediaMiniGameQuestion[] {
+  const miniGameType = invitation.miniGameType;
+  if (!miniGameType) {
+    return [];
+  }
+
+  const format = normalizeFormat(invitation.format);
+  const topicId = invitation.issueId ?? invitation.issue;
+  const risk = Math.max(invitation.risk, outlet.scrutiny * 0.7, outlet.sensationalism * 0.6);
+  const preferredSeverities =
+    miniGameType === 'hostile_interview'
+      ? ['hostile', 'hard']
+      : miniGameType === 'three_questions_timed'
+      ? risk > 0.58
+        ? ['hostile', 'hard', 'normal']
+        : ['hard', 'normal']
+      : miniGameType === 'informal_qna' || miniGameType === 'soundbite_builder'
+      ? ['soft', 'normal']
+      : miniGameType === 'long_form'
+      ? ['normal', 'soft', 'hard']
+      : ['normal', 'soft'];
+  const count =
+    miniGameType === 'long_form'
+      ? 4
+      : miniGameType === 'short_interview'
+      ? risk > 0.52
+        ? 3
+        : 2
+      : 3;
+  const shouldBeTimed = miniGameType === 'three_questions_timed' || miniGameType === 'hostile_interview';
+  const fallbackTopic = state.issueLayer.issues.find((issue) => issue.defaultSalience > 0.7)?.id ?? topicId;
+  const pool = mediaMiniGameQuestions
+    .filter((question) => question.topicId === topicId || question.topicId === fallbackTopic)
+    .filter((question) => question.miniGameTypes.includes(miniGameType) || question.formats.includes(format))
+    .sort((a, b) => severityRank(preferredSeverities, a.severity) - severityRank(preferredSeverities, b.severity));
+  const selected = uniqueQuestions(pool, count);
+
+  return selected.map((question, index) => ({
+    ...question,
+    timeLimitSec: shouldBeTimed
+      ? clamp(Math.round((miniGameType === 'hostile_interview' ? 8 : 10) + index * 2 + Math.max(0, 0.7 - risk) * 4), 8, miniGameType === 'hostile_interview' ? 15 : 18)
+      : miniGameType === 'short_interview' && risk > 0.58
+      ? 20
+      : undefined,
+  }));
+}
+
+export function scoreMediaMiniGameAnswers(
+  answers: readonly MediaMiniGameAnswer[],
+  questions: readonly MediaMiniGameQuestion[],
+  context: {
+    invitation: MediaInvitation;
+    outlet: MediaOutlet;
+    speakerRole?: SpeakerRole;
+    state: GameState;
+  },
+): MediaMiniGameResult {
+  if (questions.length === 0) {
+    return { performanceMultiplier: 1, successScore: 0.5, controversyAdjustment: 0 };
+  }
+
+  let performance = 0;
+  let controversy = 0;
+  for (let index = 0; index < questions.length; index += 1) {
+    const question = questions[index];
+    const answer = answers[index] ?? vagueAnswer(question);
+    const speakerFit = answer.bestForSpeakerRoles?.includes(context.speakerRole ?? 'leader') ? 0.025 : 0;
+    const positionFit = answerPositionFit(answer, question.topicId, context.state);
+    const outletRiskPenalty = (answer.tone === 'aggressive' ? context.outlet.sensationalism * 0.035 : 0) + (answer.tone === 'vague' || answer.tone === 'evasive' ? context.outlet.scrutiny * 0.025 : 0);
+    performance += answer.performanceDelta + speakerFit + positionFit - outletRiskPenalty;
+    controversy += (answer.controversyDelta ?? 0) + (answer.tone === 'aggressive' ? 0.02 : 0) - (answer.tone === 'empathetic' ? 0.01 : 0);
+  }
+
+  const averagePerformance = performance / Math.max(1, questions.length);
+  const averageControversy = controversy / Math.max(1, questions.length);
+  return {
+    controversyAdjustment: round4(clamp(averageControversy, -0.06, 0.1)),
+    performanceMultiplier: round4(clamp(1 + averagePerformance, 0.75, 1.2)),
+    successScore: round4(clamp(0.5 + averagePerformance * 1.6 - Math.max(0, averageControversy) * 0.5, 0, 1)),
+  };
+}
+
+function declineMediaResult(invitation: MediaInvitation, outlet: MediaOutlet): MediaAppearanceResult {
+  const reach = invitation.expectedReach ?? outlet.baseReach ?? outlet.reach;
+  const isHighReachMainstream = reach >= 0.6 && (normalizeFormat(invitation.format) === 'debate' || normalizeFormat(invitation.format) === 'duel') && (outlet.controversy ?? 0) < 0.5;
+  const isToxic = (outlet.controversy ?? 0) >= 0.7 || outlet.sensationalism >= 0.78 || outlet.credibility < 0.4;
+
+  if (isToxic) {
+    return {
+      clusterImpacts: [],
+      controversyTriggered: false,
+      invitationId: invitation.id,
+      issueSalienceDelta: {},
+      partyMomentumDelta: 0,
+      reputationDelta: { authenticity: 0.002, controversy: -0.002, trust: 0.001 },
+      sentimentLabel: 'Odmítnuto',
+      sentimentStatus: 'declined',
+      sentimentSummary: `${outlet.name}: odmitnuti je obhajitelne, protoze medium nese vysoke reputacni riziko.`,
+      successScore: 0.52,
+      summary: `${outlet.name}: pozvanka odmitnuta kvuli reputacnimu riziku kanalu.`,
+    };
+  }
+
+  if (isHighReachMainstream) {
+    return {
+      clusterImpacts: [],
+      controversyTriggered: false,
+      invitationId: invitation.id,
+      issueSalienceDelta: {},
+      partyMomentumDelta: -0.018,
+      reputationDelta: { authenticity: -0.008, competence: -0.004, trust: -0.007 },
+      sentimentLabel: 'Odmítnuto',
+      sentimentStatus: 'declined',
+      sentimentSummary: `${outlet.name}: odmitnuti vysokeho dosahu muze pusobit jako vyhybani se verejne kontrole.`,
+      successScore: 0.32,
+      summary: `${outlet.name}: odmitnuti hlavni debaty vytvari reputacni riziko.`,
+    };
+  }
+
+  return {
+    clusterImpacts: [],
+    controversyTriggered: false,
+    invitationId: invitation.id,
+    issueSalienceDelta: {},
+    partyMomentumDelta: reach < 0.3 ? -0.001 : -0.004,
+    reputationDelta: reach < 0.3 ? {} : { authenticity: -0.002, trust: -0.002 },
+    sentimentLabel: 'Odmítnuto',
+    sentimentStatus: 'declined',
+    sentimentSummary: `${outlet.name}: odmitnuti ma nizky az mirny dopad podle dosahu pozvanky.`,
+    successScore: reach < 0.3 ? 0.5 : 0.44,
+    summary: `${outlet.name}: pozvanka odmitnuta s omezenym dopadem.`,
+  };
+}
+
+function severityRank(preferred: readonly string[], severity: MediaMiniGameQuestion['severity']) {
+  const index = preferred.indexOf(severity);
+  return index >= 0 ? index : preferred.length + 1;
+}
+
+function uniqueQuestions(questions: readonly MediaMiniGameQuestion[], count: number) {
+  const seen = new Set<string>();
+  const selected: MediaMiniGameQuestion[] = [];
+  for (const question of questions) {
+    if (seen.has(question.id)) {
+      continue;
+    }
+    seen.add(question.id);
+    selected.push(question);
+    if (selected.length >= count) {
+      break;
+    }
+  }
+  if (selected.length >= count) {
+    return selected;
+  }
+
+  for (const question of mediaMiniGameQuestions) {
+    if (!seen.has(question.id)) {
+      seen.add(question.id);
+      selected.push(question);
+    }
+    if (selected.length >= count) {
+      break;
+    }
+  }
+  return selected;
+}
+
+function vagueAnswer(question: MediaMiniGameQuestion): MediaMiniGameAnswer {
+  return (
+    question.options.find((answer) => answer.tone === 'vague' || answer.tone === 'evasive') ?? {
+      id: 'timeout',
+      label: 'Bez odpovedi',
+      performanceDelta: -0.08,
+      text: 'Bez konkretni odpovedi.',
+      tone: 'vague',
+    }
+  );
+}
+
+function answerPositionFit(answer: MediaMiniGameAnswer, topicId: ProgramIssueId, state: GameState) {
+  const position = state.issueLayer.player.currentIssuePositions[topicId];
+  if (!position) {
+    return 0;
+  }
+
+  if (answer.tone === 'specific' || answer.tone === 'technical') {
+    return Math.abs(position.position) >= 1 ? 0.012 : 0.004;
+  }
+  if (answer.tone === 'empathetic') {
+    return position.salience >= 2 ? 0.01 : 0.003;
+  }
+  if (answer.tone === 'aggressive') {
+    return position.rigidity > 0.55 ? 0.006 : -0.006;
+  }
+  return -0.008;
 }
 
 function toInvitation(template: MediaInvitationTemplate, week: number): MediaInvitation {
@@ -366,6 +585,21 @@ function legacyIssueFromTopic(issueId: ProgramIssueId): IssueId {
     taxes: 'taxes',
     transport: 'transport',
     ukraineSupport: 'security',
+  };
+  return map[issueId] ?? 'taxes';
+}
+
+function programTopicFromLegacy(issueId: IssueId): ProgramIssueId {
+  const map: Partial<Record<IssueId, ProgramIssueId>> = {
+    climate: 'greenDeal',
+    education: 'civilServiceReform',
+    greenDeal: 'greenDeal',
+    healthcare: 'pensions',
+    housing: 'housing',
+    industry: 'energyPrices',
+    security: 'lawAndOrder',
+    taxes: 'taxes',
+    transport: 'housing',
   };
   return map[issueId] ?? 'taxes';
 }

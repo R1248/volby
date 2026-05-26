@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { GameScreen } from '@/src/components/layout/GameScreen';
 import { MediaInvitationCard } from '@/src/components/media/MediaInvitationCard';
+import { selectMediaMiniGameQuestions } from '@/src/game/mediaEngine';
 import { useGameStore } from '@/src/store/useGameStore';
 import { colors } from '@/src/theme/colors';
 
@@ -23,8 +24,10 @@ export default function MediaScreen() {
           const result = gameState.mediaAppearanceResults?.find((item) => item.invitationId === invitation.id);
           return (
             <MediaInvitationCard
+              gameState={gameState}
               invitation={invitation}
               key={invitation.id}
+              minigameQuestions={outlet ? selectMediaMiniGameQuestions(invitation, outlet, gameState) : []}
               onDecision={respondToEarnedMediaInvitation}
               outlet={outlet}
               result={result}

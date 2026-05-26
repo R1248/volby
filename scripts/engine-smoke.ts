@@ -14,8 +14,10 @@ import {
   resolveTurn,
   updateProgramIssue,
 } from '../src/game/engine';
+import { mediaOutlets } from '../src/data/mediaOutlets';
+import { scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
-import type { GameState, PlannedAction } from '../src/game/types';
+import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -127,6 +129,76 @@ assert(
   'Immediate media UI must not show exact support deltas',
 );
 
+const publicDebateOutlet = mediaOutlets.find((outlet) => outlet.id === 'public_tv_main_debate');
+const toxicOutlet = mediaOutlets.find((outlet) => outlet.id === 'anti_establishment_channel');
+const regionalOutlet = mediaOutlets.find((outlet) => outlet.id === 'regional_radio');
+assert(publicDebateOutlet && toxicOutlet && regionalOutlet, 'Expected media outlets for decline tests');
+const highReachDebate = testInvitation('decline-high', publicDebateOutlet.id, 'taxes', 'debate', 0.82, 0.62, 'three_questions_timed');
+const lowReachRegional = testInvitation('decline-low', regionalOutlet.id, 'energyPrices', 'regional', 0.18, 0.2, null);
+const toxicPodcast = testInvitation('decline-toxic', toxicOutlet.id, 'nationalSovereignty', 'podcast', 0.35, 0.86, 'hostile_interview');
+const declineState = initializeComputedState({
+  ...baseState,
+  mediaInvitations: [highReachDebate, lowReachRegional, toxicPodcast],
+});
+const highDecline = respondToMediaAppearance(declineState, { action: 'decline', invitationId: highReachDebate.id, preparationLevel: 'none' });
+const lowDecline = respondToMediaAppearance(declineState, { action: 'decline', invitationId: lowReachRegional.id, preparationLevel: 'none' });
+const toxicDecline = respondToMediaAppearance(declineState, { action: 'decline', invitationId: toxicPodcast.id, preparationLevel: 'none' });
+const highDeclineResult = highDecline.pendingMediaEffects?.[0];
+const lowDeclineResult = lowDecline.pendingMediaEffects?.[0];
+const toxicDeclineResult = toxicDecline.pendingMediaEffects?.[0];
+assert(highDeclineResult?.sentimentLabel === 'Odmítnuto', 'Declined media should show a declined sentiment label');
+assert(highDeclineResult.sentimentRating !== 1, 'Declined media should not automatically show 1/5 Prusvih');
+assert(
+  Math.abs(highDeclineResult.partyMomentumDelta) > Math.abs(lowDeclineResult?.partyMomentumDelta ?? 0),
+  'High-reach debate decline should carry stronger pending penalty than low-reach decline',
+);
+assert(
+  (toxicDeclineResult?.partyMomentumDelta ?? -1) >= (lowDeclineResult?.partyMomentumDelta ?? 0),
+  'Toxic outlet decline should be neutral or defensible',
+);
+
+const hostileQuestions = selectMediaMiniGameQuestions(highReachDebate, publicDebateOutlet, declineState);
+assert(hostileQuestions.length === 3, 'three_questions_timed should select three questions');
+assert(hostileQuestions.every((question) => question.topicId === 'taxes' || question.timeLimitSec), 'Selected questions should match topic/format risk');
+assert(hostileQuestions.every((question) => (question.timeLimitSec ?? 0) >= 10 && (question.timeLimitSec ?? 0) <= 18), 'Timed debate questions should have 10-18 second limits');
+
+const longFormInvitation = testInvitation('long-form', 'business_podcast', 'taxes', 'podcast', 0.31, 0.32, 'long_form');
+const businessPodcast = mediaOutlets.find((outlet) => outlet.id === 'business_podcast');
+assert(businessPodcast, 'Expected business podcast outlet');
+const longFormQuestions = selectMediaMiniGameQuestions(longFormInvitation, businessPodcast, declineState);
+assert(longFormQuestions.length === 4, 'long_form should select four questions');
+assert(longFormQuestions.every((question) => question.timeLimitSec === undefined), 'long_form should not use time limits');
+
+const soundbiteInvitation = testInvitation('soundbite', 'commercial_tv_evening_show', 'energyPrices', 'interview', 0.68, 0.45, 'soundbite_builder');
+const commercialOutlet = mediaOutlets.find((outlet) => outlet.id === 'commercial_tv_evening_show');
+assert(commercialOutlet, 'Expected commercial TV outlet');
+const soundbiteQuestions = selectMediaMiniGameQuestions(soundbiteInvitation, commercialOutlet, declineState);
+assert(soundbiteQuestions.length === 3, 'soundbite_builder should select compact questions');
+assert(soundbiteQuestions.some((question) => question.topicId === 'energyPrices'), 'Soundbite questions should include the invitation topic');
+
+const strongMiniGame = scoreMediaMiniGameAnswers(
+  hostileQuestions.map((question) => question.options[0]),
+  hostileQuestions,
+  { invitation: highReachDebate, outlet: publicDebateOutlet, speakerRole: 'leader', state: declineState },
+);
+const weakMiniGame = scoreMediaMiniGameAnswers(
+  hostileQuestions.map((question) => question.options.find((answer) => answer.tone === 'vague') ?? question.options[0]),
+  hostileQuestions,
+  { invitation: highReachDebate, outlet: publicDebateOutlet, speakerRole: 'leader', state: declineState },
+);
+assert(strongMiniGame.performanceMultiplier > weakMiniGame.performanceMultiplier, 'Minigame answers should change performanceMultiplier');
+const miniGamePending = respondToMediaAppearance(declineState, {
+  action: 'accept',
+  invitationId: highReachDebate.id,
+  miniGameResult: strongMiniGame,
+  preparationLevel: 'basic',
+  speakerRole: 'leader',
+});
+assert((miniGamePending.pendingMediaEffects ?? []).length === 1, 'Media minigame result should still go to pendingMediaEffects');
+assert(JSON.stringify(miniGamePending.nationalSupport) === JSON.stringify(declineState.nationalSupport), 'Media minigame should not immediately change support');
+const miniGameResolved = resolveTurn(miniGamePending, [], 111).state;
+assert(JSON.stringify(miniGameResolved.nationalSupport) !== JSON.stringify(miniGamePending.nationalSupport), 'Support should change only after pending media is applied in resolveTurn');
+
 const programQuestionId = baseState.issueLayer.pendingMediaQuestionId;
 assert(programQuestionId, 'Expected pending program media question');
 const programQuestion = baseState.issueLayer.mediaQuestions.find((question) => question.id === programQuestionId);
@@ -229,3 +301,28 @@ const seatTotal = partyIds.reduce((sum, partyId) => sum + seats[partyId], 0);
 assert(seatTotal === 200, `Final election seats must sum to 200, got ${seatTotal}`);
 
 console.log('Engine smoke tests passed');
+
+function testInvitation(
+  id: string,
+  outletId: string,
+  issueId: NonNullable<MediaInvitation['issueId']>,
+  format: MediaInvitation['format'],
+  expectedReach: number,
+  risk: number,
+  miniGameType: MediaInvitation['miniGameType'],
+): MediaInvitation {
+  return {
+    expectedReach,
+    format,
+    id,
+    issue: issueId === 'greenDeal' ? 'greenDeal' : issueId === 'housing' ? 'housing' : issueId === 'taxes' ? 'taxes' : 'security',
+    issueId,
+    miniGameType,
+    outletId,
+    recommendedSpeakerRoles: ['leader', 'expert'],
+    requiredPreparation: 0.5,
+    resolved: false,
+    risk,
+    week: baseState.week,
+  };
+}
