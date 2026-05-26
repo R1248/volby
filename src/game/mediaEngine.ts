@@ -130,6 +130,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
   const credibilityMultiplier = 0.65 + outlet.credibility * 0.7;
   const expectedReach = (invitation.expectedReach ?? outlet.baseReach ?? outlet.reach) * speakerProfile.reachMultiplier;
   const topicId = invitation.issueId ?? programTopicFromLegacy(invitation.issue);
+  const topicAffinityMultiplier = 0.85 + ((outlet.topicAffinity as Partial<Record<ProgramIssueId, number>> | undefined)?.[topicId] ?? 0.45) * 0.3;
 
   const clusterImpacts = voterClusters.map((cluster) => {
     const audienceByCluster = outlet.audienceByCluster as Partial<Record<string, number>> | undefined;
@@ -139,7 +140,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     const audienceShare = audienceByCluster?.[cluster.id] ?? audienceMix?.[cluster.id] ?? 0;
     const trust = trustByCluster?.[cluster.id] ?? 0.45;
     const topicRelevance = issueSensitivity[topicId] ?? fallbackTopicRelevance(topicId, cluster);
-    const controversyPenalty = controversyPenaltyForCluster(outlet, trust, speakerRole, format, decision.preparationLevel);
+    const controversyPenalty = controversyPenaltyForCluster(outlet, trust, speakerRole, format, decision.preparationLevel, audienceShare, expectedReach);
     const impact =
       expectedReach *
         audienceShare *
@@ -148,6 +149,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
         speakerFitMultiplier *
         preparationMultiplier *
         performanceMultiplier *
+        topicAffinityMultiplier *
         topicRelevance *
         credibilityMultiplier -
       controversyPenalty;
@@ -186,6 +188,13 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     0,
     1,
   );
+  const sentimentScore = clamp(
+    decision.miniGameResult?.successScore === undefined
+      ? successScore
+      : successScore * 0.75 + decision.miniGameResult.successScore * 0.25,
+    0,
+    1,
+  );
   const issueSalienceDelta = {
     [topicId]: round4(0.12 * formatProfile.salienceMultiplier * (invitation.expectedReach ?? outlet.reach) * (controversyTriggered ? 1.3 : 1)),
   };
@@ -195,9 +204,13 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     controversyTriggered,
     invitationId: invitation.id,
     issueSalienceDelta,
+    miniGameCompetenceAdjustment: decision.miniGameResult?.competenceAdjustment,
+    miniGameConsistencyAdjustment: decision.miniGameResult?.consistencyAdjustment,
+    miniGameFiscalCredibilityScore: decision.miniGameResult?.fiscalCredibilityScore,
     partyMomentumDelta: round4(weightedImpact * 6 - (controversyTriggered ? 0.025 : 0)),
     programEffects: decision.miniGameResult?.impliedProgramEffects ?? [],
     reputationDelta: reputationDeltaFor(speakerRole, successScore, controversyTriggered, speakerProfile.competenceMultiplier),
+    sentimentScore: round4(sentimentScore),
     successScore: round4(successScore),
     summary: `${outlet.name}: ${speakerRoleProfiles[speakerRole].name} v formatu ${formatProfile.name} ${successScore >= 0.55 ? 'posilil medialni vykon' : 'mel omezeny efekt'}${controversyTriggered ? ' a vyvolal kontroverzi' : ''}.`,
   };
@@ -216,7 +229,7 @@ export function mediaSentimentFromResult(result: MediaAppearanceResult): {
     };
   }
 
-  const adjusted = result.successScore - (result.controversyTriggered ? 0.12 : 0);
+  const adjusted = (result.sentimentScore ?? result.successScore) - (result.controversyTriggered ? 0.12 : 0);
   const rating: MediaSentimentRating =
     adjusted < 0.25 ? 1 : adjusted < 0.43 ? 2 : adjusted < 0.58 ? 3 : adjusted < 0.76 ? 4 : 5;
   const labels: Record<MediaSentimentRating, string> = {
@@ -671,11 +684,21 @@ function controversyPenaltyForCluster(
   speakerRole: SpeakerRole,
   format: MediaFormat,
   preparationLevel: MediaPreparationLevel,
+  audienceShare: number,
+  expectedReach: number,
 ) {
   const controversy = outlet.controversy ?? outlet.sensationalism;
   const speakerRisk = speakerRole === 'controversialFigure' ? 0.18 : speakerRole === 'leader' ? 0.06 : 0;
   const prepRelief = preparationLevel === 'strong' ? 0.55 : preparationLevel === 'basic' ? 0.8 : 1;
-  return Math.max(0, controversy - 0.34) * Math.max(0.05, 0.62 - trust) * mediaFormatProfiles[format].riskMultiplier * prepRelief + speakerRisk * Math.max(0, 0.55 - trust);
+  const baseControversyPenalty =
+    Math.max(0, controversy - 0.34) * Math.max(0.05, 0.62 - trust) * mediaFormatProfiles[format].riskMultiplier * prepRelief +
+    speakerRisk * Math.max(0, 0.55 - trust);
+  const publicSpillover = clamp(
+    outlet.sensationalism * 0.12 + controversy * 0.1 + expectedReach * 0.08 + mediaFormatProfiles[format].riskMultiplier * 0.04,
+    0.04,
+    0.3,
+  );
+  return baseControversyPenalty * (0.45 + audienceShare * 0.55) + baseControversyPenalty * publicSpillover;
 }
 
 function effectiveRisk(

@@ -16,7 +16,7 @@ import {
 } from '../src/game/engine';
 import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
-import { scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
+import { resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
 import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
 
@@ -166,6 +166,32 @@ assert(
   (toxicDeclineResult?.partyMomentumDelta ?? -1) >= (lowDeclineResult?.partyMomentumDelta ?? 0),
   'Toxic outlet decline should be neutral or defensible',
 );
+const antiSovereigntyResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: 'anti-sovereignty-impact', preparationLevel: 'basic', speakerRole: 'controversialFigure' },
+  initializeComputedState({
+    ...baseState,
+    mediaInvitations: [testInvitation('anti-sovereignty-impact', toxicOutlet.id, 'nationalSovereignty', 'podcast', 0.35, 0.86, null)],
+  }),
+);
+const antiHealthcareResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: 'anti-healthcare-impact', preparationLevel: 'basic', speakerRole: 'controversialFigure' },
+  initializeComputedState({
+    ...baseState,
+    mediaInvitations: [testInvitation('anti-healthcare-impact', toxicOutlet.id, 'healthcare', 'podcast', 0.35, 0.86, null)],
+  }),
+);
+const antiClusterImpact = antiSovereigntyResult.clusterImpacts.find((impact) => impact.clusterId === 'anti_establishment_online');
+const protestClusterImpact = antiSovereigntyResult.clusterImpacts.find((impact) => impact.clusterId === 'working_class_protest');
+const liberalClusterImpact = antiSovereigntyResult.clusterImpacts.find((impact) => impact.clusterId === 'urban_liberal_professionals');
+assert(antiClusterImpact && protestClusterImpact && liberalClusterImpact, 'Expected anti-establishment channel cluster impacts');
+assert(antiClusterImpact.impact > 0 || protestClusterImpact.impact > 0, 'Anti-establishment channel should be able to help its protest audience');
+assert(liberalClusterImpact.impact < antiClusterImpact.impact, 'Anti-establishment channel should create backlash or weaker response among liberal/pro-establishment clusters');
+assert(liberalClusterImpact.controversyPenalty !== antiClusterImpact.controversyPenalty, 'Low-audience backlash should not equal main-audience controversy effect');
+const antiSovereigntyInAudience = antiClusterImpact.impact + (protestClusterImpact?.impact ?? 0);
+const antiHealthcareInAudience =
+  (antiHealthcareResult.clusterImpacts.find((impact) => impact.clusterId === 'anti_establishment_online')?.impact ?? 0) +
+  (antiHealthcareResult.clusterImpacts.find((impact) => impact.clusterId === 'working_class_protest')?.impact ?? 0);
+assert(antiSovereigntyInAudience > antiHealthcareInAudience, 'Anti-establishment channel should have stronger in-audience impact for sovereignty than unrelated expert issues');
 
 const hostileQuestions = selectMediaMiniGameQuestions(highReachDebate, publicDebateOutlet, declineState);
 assert(hostileQuestions.length === 3, 'three_questions_timed should select three questions');
@@ -187,12 +213,21 @@ assert(
 const taxFundingQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-funding-source');
 const taxBeneficiaryQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-beneficiaries-first');
 const taxCoherenceQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-service-promise-trap');
+const taxPositionQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-position-direct');
 assert(taxFundingQuestion && taxBeneficiaryQuestion && taxCoherenceQuestion, 'Expected realistic tax trade-off questions');
 const fundedTaxAnswer = taxFundingQuestion.options.find((answer) => answer.id === 'spending-cuts');
 const unfundedTaxAnswer = taxBeneficiaryQuestion.options.find((answer) => answer.id === 'everyone');
 const coherentTaxAnswer = taxCoherenceQuestion.options.find((answer) => answer.id === 'services-first');
 const populistTaxAnswer = taxCoherenceQuestion.options.find((answer) => answer.id === 'everything-now');
-assert(fundedTaxAnswer && unfundedTaxAnswer && coherentTaxAnswer && populistTaxAnswer, 'Expected tax trade-off answers');
+const lowTaxAnswer = taxPositionQuestion?.options.find((answer) => answer.id === 'lower');
+const highRevenueAnswer = taxPositionQuestion?.options.find((answer) => answer.id === 'higher');
+const sectorTaxAnswer = taxFundingQuestion.options.find((answer) => answer.id === 'property-sector-taxes');
+assert(fundedTaxAnswer && unfundedTaxAnswer && coherentTaxAnswer && populistTaxAnswer && taxPositionQuestion && lowTaxAnswer && highRevenueAnswer && sectorTaxAnswer, 'Expected tax trade-off answers');
+assert((lowTaxAnswer.impliedIssuePosition?.taxes ?? 0) > 0, 'Low-tax answer should imply positive taxes position');
+assert((highRevenueAnswer.impliedIssuePosition?.taxes ?? 0) < 0, 'Higher-revenue answer should imply negative taxes position');
+assert((sectorTaxAnswer.impliedIssuePosition?.taxes ?? 0) < 0, 'Property/sector tax answer should not imply low-tax economics');
+assert((lowTaxAnswer.impliedAxisPosition?.econ ?? 0) > 0, 'Low-tax answer should imply econ-right axis');
+assert((highRevenueAnswer.impliedAxisPosition?.econ ?? 0) < 0, 'Higher-revenue answer should imply econ-left axis');
 const fundedTaxScore = scoreMediaMiniGameAnswers([fundedTaxAnswer], [taxFundingQuestion], {
   invitation: highReachDebate,
   outlet: publicDebateOutlet,
@@ -238,6 +273,78 @@ const populistTaxScore = scoreMediaMiniGameAnswers([populistTaxAnswer], [taxCohe
   state: declineState,
 });
 assert(coherentTaxScore.performanceMultiplier > populistTaxScore.performanceMultiplier, 'Coherent trade-off answer should score better than populist vague answer');
+const lowTaxProgramState = updateProgramIssue(baseState, 'taxes', { position: 2, salience: 4 });
+const lowTaxProgramDebate = testInvitation('tax-commitment-direction', publicDebateOutlet.id, 'taxes', 'debate', 0.82, 0.62, 'three_questions_timed');
+const lowTaxAlignedScore = scoreMediaMiniGameAnswers([lowTaxAnswer], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+const highTaxMismatchScore = scoreMediaMiniGameAnswers([highRevenueAnswer], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+assert((lowTaxAlignedScore.programMismatchPenalty ?? 0) < 0.01, 'Low-tax answer should fit a high positive taxes program position');
+assert((highTaxMismatchScore.programMismatchPenalty ?? 0) > (lowTaxAlignedScore.programMismatchPenalty ?? 0), 'High-tax answer should mismatch a high positive taxes program position');
+const taxMismatchPending = respondToMediaAppearance(
+  initializeComputedState({
+    ...lowTaxProgramState,
+    mediaInvitations: [lowTaxProgramDebate],
+  }),
+  {
+    action: 'accept',
+    invitationId: lowTaxProgramDebate.id,
+    miniGameResult: highTaxMismatchScore,
+    preparationLevel: 'basic',
+    speakerRole: 'leader',
+  },
+);
+assert(
+  taxMismatchPending.issueLayer.player.currentIssuePositions.taxes.position === lowTaxProgramState.issueLayer.player.currentIssuePositions.taxes.position,
+  'Tax program commitment effects must not apply immediately',
+);
+const taxMismatchResolved = resolveTurn(taxMismatchPending, [], 114).state;
+assert(
+  taxMismatchResolved.issueLayer.player.currentIssuePositions.taxes.position < lowTaxProgramState.issueLayer.player.currentIssuePositions.taxes.position,
+  'High-tax media commitment should shift taxes position downward after resolveTurn',
+);
+const growthPaysAnswer = taxFundingQuestion.options.find((answer) => answer.id === 'growth-pays');
+assert(growthPaysAnswer, 'Expected vague growth-pays tax answer');
+const fiscallyWeakScore = scoreMediaMiniGameAnswers([growthPaysAnswer], [taxFundingQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: declineState,
+});
+const fiscalReputationState = initializeComputedState({
+  ...baseState,
+  mediaInvitations: [highReachDebate],
+});
+const fiscalCompetenceBefore = fiscalReputationState.partyRuntime.player.reputation.competence;
+const fiscalPending = respondToMediaAppearance(fiscalReputationState, {
+  action: 'accept',
+  invitationId: highReachDebate.id,
+  miniGameResult: fiscallyWeakScore,
+  preparationLevel: 'basic',
+  speakerRole: 'leader',
+});
+assert(fiscalPending.partyRuntime.player.reputation.competence === fiscalCompetenceBefore, 'Fiscal/competence minigame reputation effects must not apply immediately');
+const fiscalResolved = resolveTurn(fiscalPending, [], 115).state;
+const fiscalCompetenceDelta = fiscalResolved.partyRuntime.player.reputation.competence - fiscalCompetenceBefore;
+assert(fiscalCompetenceDelta < 0, 'Fiscally weak answer in a serious outlet should reduce competence after resolveTurn');
+assert(Math.abs(fiscalCompetenceDelta) <= 0.03, `Delayed fiscal competence effect should stay small, got ${fiscalCompetenceDelta}`);
+const goodSentimentResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: highReachDebate.id, miniGameResult: fundedTaxScore, preparationLevel: 'basic', speakerRole: 'expert' },
+  declineState,
+);
+const badSentimentResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: highReachDebate.id, miniGameResult: populistTaxScore, preparationLevel: 'basic', speakerRole: 'expert' },
+  declineState,
+);
+assert((goodSentimentResult.sentimentScore ?? goodSentimentResult.successScore) > (badSentimentResult.sentimentScore ?? badSentimentResult.successScore), 'Good minigame answers should produce better immediate sentiment score than vague/populist answers');
 for (const templateTopic of new Set(mediaInvitationTemplates.map((template) => template.topicId))) {
   const topicQuestions = mediaMiniGameQuestions.filter((question) => question.topicId === templateTopic && !question.isGenericFallback);
   assert(topicQuestions.length >= 3, `Media invitation topic ${templateTopic} should have at least three topic-specific minigame questions`);
@@ -264,6 +371,22 @@ assert(
 const longFormInvitation = testInvitation('long-form', 'business_podcast', 'taxes', 'podcast', 0.31, 0.32, 'long_form');
 const businessPodcast = mediaOutlets.find((outlet) => outlet.id === 'business_podcast');
 assert(businessPodcast, 'Expected business podcast outlet');
+const businessTaxAffinity = resolveMediaAppearance(
+  { action: 'accept', invitationId: 'business-tax-affinity', preparationLevel: 'basic', speakerRole: 'expert' },
+  initializeComputedState({
+    ...baseState,
+    mediaInvitations: [testInvitation('business-tax-affinity', businessPodcast.id, 'taxes', 'podcast', 0.31, 0.32, null)],
+  }),
+);
+const businessUnrelatedAffinity = resolveMediaAppearance(
+  { action: 'accept', invitationId: 'business-unrelated-affinity', preparationLevel: 'basic', speakerRole: 'expert' },
+  initializeComputedState({
+    ...baseState,
+    mediaInvitations: [testInvitation('business-unrelated-affinity', businessPodcast.id, 'sameSexMarriage', 'podcast', 0.31, 0.32, null)],
+  }),
+);
+const totalPositiveImpact = (result: typeof businessTaxAffinity) => result.clusterImpacts.reduce((sum, impact) => sum + Math.max(0, impact.impact), 0);
+assert(totalPositiveImpact(businessTaxAffinity) > totalPositiveImpact(businessUnrelatedAffinity), 'Business podcast should have stronger expected impact for taxes than an unrelated issue');
 const longFormQuestions = selectMediaMiniGameQuestions(longFormInvitation, businessPodcast, declineState);
 assert(longFormQuestions.length === 4, 'long_form should select four questions');
 assert(longFormQuestions.every((question) => question.timeLimitSec === undefined), 'long_form should not use time limits');

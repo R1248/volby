@@ -5,7 +5,7 @@ import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
 import { createIssueLayerState } from './issueSeed';
 import { generateWeeklyMediaInvitations, mediaSentimentFromResult, resolveMediaAppearance } from './mediaEngine';
-import { voterClusters } from '../data/mediaOutlets';
+import { mediaOutlets, voterClusters } from '../data/mediaOutlets';
 import { deriveParliamentAttendancePressure } from './programMandateCatalog';
 import {
   answerCampaignTrip as answerCampaignTripInLayer,
@@ -539,6 +539,7 @@ function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceRes
   ].slice(0, 60);
 
   applyReputationDelta(runtime.reputation, appliedResult.reputationDelta);
+  applyMiniGameReputationAdjustments(state, appliedResult);
   applyMediaIssueSalience(state, appliedResult.issueSalienceDelta);
   applyProgramMediaEffects(state, appliedResult);
   runtime.field.amplitude = clamp(runtime.field.amplitude + appliedResult.partyMomentumDelta * 0.8, 0.35, 1.8);
@@ -567,6 +568,32 @@ function applyReputationDelta(reputation: ReputationVector, delta?: Partial<Repu
   for (const [key, amount] of Object.entries(delta ?? {}) as [keyof ReputationVector, number][]) {
     reputation[key] = clamp(reputation[key] + amount, 0, 1);
   }
+}
+
+function applyMiniGameReputationAdjustments(state: GameState, result: MediaAppearanceResult) {
+  const invitation = state.mediaInvitations.find((item) => item.id === result.invitationId);
+  if (!invitation) {
+    return;
+  }
+  const outlet = state.media.find((item) => item.id === invitation.outletId) ?? mediaOutlets.find((item) => item.id === invitation.outletId);
+  if (!outlet) {
+    return;
+  }
+
+  const topicId = invitation.issueId;
+  const fiscalTopics = new Set<ProgramIssueId>(['taxes', 'regulation', 'energyPrices', 'housing', 'healthcare', 'pensions', 'transport']);
+  const outletSeriousness = clamp(outlet.scrutiny * 0.6 + outlet.credibility * 0.3 + invitation.risk * 0.1, 0, 1);
+  const competenceShift =
+    clamp((result.miniGameCompetenceAdjustment ?? 0) * outletSeriousness * 0.35, -0.015, 0.012) +
+    (topicId && fiscalTopics.has(topicId)
+      ? clamp((result.miniGameFiscalCredibilityScore ?? 0) * outletSeriousness * 0.25, -0.012, 0.008)
+      : 0);
+  const consistencyShift = clamp((result.miniGameConsistencyAdjustment ?? 0) * outletSeriousness * 0.35, -0.012, 0.01);
+
+  applyReputationDelta(state.partyRuntime.player.reputation, {
+    competence: Math.round(competenceShift * 10000) / 10000,
+    consistency: Math.round(consistencyShift * 10000) / 10000,
+  });
 }
 
 function applyMediaIssueSalience(state: GameState, issueSalienceDelta: MediaAppearanceResult['issueSalienceDelta']) {

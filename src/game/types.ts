@@ -474,6 +474,9 @@ export type MediaAppearanceResult = {
   controversyTriggered: boolean;
   invitationId: string;
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
+  miniGameCompetenceAdjustment?: number;
+  miniGameConsistencyAdjustment?: number;
+  miniGameFiscalCredibilityScore?: number;
   partyMomentumDelta: number;
   programEffects?: PendingProgramMediaEffect[];
   programWarning?: {
@@ -483,6 +486,7 @@ export type MediaAppearanceResult = {
   reputationDelta?: Partial<ReputationVector>;
   sentimentLabel?: string;
   sentimentRating?: MediaSentimentRating;
+  sentimentScore?: number;
   sentimentSummary?: string;
   sentimentStatus?: 'rated' | 'declined';
   status?: 'pending' | 'applied';
