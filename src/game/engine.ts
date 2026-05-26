@@ -1,8 +1,9 @@
-import { partyIds } from './seed';
+import { baselineTargetShares, partyIds } from './seed';
 import type { RegionId } from '../types/region';
 import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/regionalAggregation';
 import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
+import { calibratePartyAmplitudesToTargets, type BaselineSupportOptions } from './baselineCalibration';
 import { createIssueLayerState } from './issueSeed';
 import { generateWeeklyMediaInvitations, mediaSentimentFromResult, resolveMediaAppearance } from './mediaEngine';
 import { mediaOutlets, voterClusters } from '../data/mediaOutlets';
@@ -52,14 +53,32 @@ const latentDimensions8D: LatentDimension8D[] = [
 ];
 
 export function initializeComputedState(state: GameState): GameState {
-  const nextState = cloneState(state);
+  let nextState = cloneState(state);
   ensureIssueLayer(nextState);
   nextState.issueLayer = recalculateIssueLayer(nextState.issueLayer, nextState.partyRuntime.player.field.flexibility);
-  nextState.regionalSupport = computeRegionalSupport(nextState);
+  const initialBaselineOptions = nextState.baselineCalibrated === false ? { disableProgramModifier: true } : undefined;
+
+  if (nextState.baselineCalibrated === false) {
+    nextState = calibratePartyAmplitudesToTargets(nextState, baselineTargetShares, {
+      disablePlayerProgramModifier: true,
+      supportResolver: resolveSupportForCalibration,
+    });
+    nextState.baselineCalibrated = true;
+  }
+
+  nextState.regionalSupport = computeRegionalSupport(nextState, initialBaselineOptions);
   nextState.nationalSupport = computeNationalSupport(nextState, nextState.regionalSupport);
   nextState.polls = computePolls(nextState, nextState.nationalSupport).partySupportEstimate ?? nextState.polls;
   nextState.publicRegionalPolls = computePublicRegionalPolls(nextState, nextState.publicPollsterId);
   return nextState;
+}
+
+function resolveSupportForCalibration(state: GameState, options?: BaselineSupportOptions) {
+  const regionalSupport = computeRegionalSupport(state, options);
+  return {
+    nationalSupport: computeNationalSupport(state, regionalSupport),
+    regionalSupport,
+  };
 }
 
 export function generateWeeklyContext(state: GameState, rngSeed = state.rngSeed) {
@@ -173,12 +192,14 @@ export function previewActionImpact(state: GameState, plannedAction: PlannedActi
   };
 }
 
-export function computeRegionalSupport(state: GameState): GameState['regionalSupport'] {
-  return computeRegionalSupportFromParticles(state, 'weekly');
+export type SupportComputationOptions = BaselineSupportOptions;
+
+export function computeRegionalSupport(state: GameState, options: SupportComputationOptions = {}): GameState['regionalSupport'] {
+  return computeRegionalSupportFromParticles(state, 'weekly', options);
 }
 
-function computeRegionalSupportFull(state: GameState): GameState['regionalSupport'] {
-  return computeRegionalSupportFromParticles(state, 'full');
+function computeRegionalSupportFull(state: GameState, options: SupportComputationOptions = {}): GameState['regionalSupport'] {
+  return computeRegionalSupportFromParticles(state, 'full', options);
 }
 
 export function computeNationalSupport(
@@ -917,7 +938,11 @@ function getCompactRegionalVoterPoints(precision: SupportPrecision) {
   return precision === 'full' ? cachedCompactFullRegionalVoterPoints! : cachedCompactWeeklyRegionalVoterPoints!;
 }
 
-function computeRegionalSupportFromParticles(state: GameState, precision: SupportPrecision): GameState['regionalSupport'] {
+function computeRegionalSupportFromParticles(
+  state: GameState,
+  precision: SupportPrecision,
+  options: SupportComputationOptions = {},
+): GameState['regionalSupport'] {
   const compactPoints = getCompactRegionalVoterPoints(precision);
   const regionsById = Object.fromEntries(state.regions.map((region) => [region.id, region])) as Record<RegionId, RegionSeed>;
   const partyContexts = partyIds
@@ -945,7 +970,7 @@ function computeRegionalSupportFromParticles(state: GameState, precision: Suppor
     let total = baselineAbstain;
     for (let index = 0; index < partyContexts.length; index += 1) {
       const context = partyContexts[index];
-      const utility = computeParticleUtilityForContext(state, context, region, point);
+      const utility = computeParticleUtilityForContext(state, context, region, point, options);
       utilities[index] = utility;
       total += utility;
     }
@@ -970,6 +995,7 @@ function computeParticleUtilityForContext(
   context: PartyUtilityContext,
   region: RegionSeed,
   point: CompactRegionalVoterPoint,
+  options: SupportComputationOptions = {},
 ) {
   const { partyId, runtime } = context;
   const kernel = Math.exp(-0.5 * ideologicalDistance8D(point.position, runtime.field));
@@ -984,7 +1010,9 @@ function computeParticleUtilityForContext(
     scandalSensitivity * reputation.controversy * 0.16;
   const organization = runtime.organization[region.id] ?? 0.25;
   const fatiguePenalty = partyId === 'player' ? runtime.leader.fatigue * 0.08 : 0;
-  const programModifier = issueLayerUtilityModifier(state.issueLayer, compactPointToSegment(point), partyId === 'player');
+  const programModifier = options.disableProgramModifier
+    ? 0
+    : issueLayerUtilityModifier(state.issueLayer, compactPointToSegment(point), partyId === 'player');
   const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
   const scandalPenalty = state.scandals
     .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)

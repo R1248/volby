@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "lint": "eslint app src",
     "prepare:voter-field": "node scripts/prepare-voter-field.mjs",
+    "debug:baseline-support": "tsc --outDir .tmp-baseline-support --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/baseline-support-debug.ts && node .tmp-baseline-support/scripts/baseline-support-debug.js",
     "sanity:party-seed": "tsc --outDir .tmp-party-seed --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/party-seed-sanity.ts && node .tmp-party-seed/scripts/party-seed-sanity.js",
     "sanity:simulation": "tsc --outDir .tmp-simulation --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/simulation-sanity.ts && node .tmp-simulation/scripts/simulation-sanity.js",
     "test:engine": "tsc --outDir .tmp-smoke --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/engine-smoke.ts src/game/engine.ts src/game/seed.ts src/game/types.ts src/types/region.ts src/data/regions.ts && node .tmp-smoke/scripts/engine-smoke.js",

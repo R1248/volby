@@ -40,6 +40,20 @@ export const partyIds: PartyId[] = [
   "top09",
 ];
 
+// 2025/2026 sanity targets normalized across this parliamentary-party seed.
+// These are not polling calibration; they anchor the starting model so vectors shape geography
+// while calibrated amplitudes set plausible national baselines.
+export const baselineTargetShares: Record<PartyId, number> = {
+  player: 0.35,
+  ods: 0.12,
+  stan: 0.1,
+  pirates: 0.08,
+  kdu: 0.06,
+  spd: 0.13,
+  motorists: 0.09,
+  top09: 0.07,
+};
+
 const vec = (econ: number, culture: number, authority: number): Vec3 => ({
   authority,
   culture,
@@ -691,13 +705,14 @@ export const parties: PartySeed[] = [
     },
     color: "#261E82",
     field: partyField({
-      amplitude: 1.28,
+      amplitude: 1,
       center: latent8(-0.22, 0.28, 0.45, -0.28, -0.18, -0.28, -0.08),
       flexibility: 0.72,
       originCenter: latent8(-0.22, 0.28, 0.45, -0.28, -0.18, -0.28, -0.08),
-      width: latent8(0.86, 0.78, 0.75, 0.82, 0.72, 0.7, 0.72),
+      width: latent8(0.74, 0.72, 0.7, 0.72, 0.68, 0.66, 0.68),
       salience: latent8(1.15, 0.8, 1.05, 0.9, 0.75, 0.8, 0.7),
     }),
+    baselineTargetShare: baselineTargetShares.player,
     id: "player",
     issueOwnership: {
       healthcare: 0.72,
@@ -772,6 +787,7 @@ export const parties: PartySeed[] = [
       width: latent8(0.62, 0.58, 0.6, 0.66, 0.62, 0.58, 0.58),
       salience: latent8(1.25, 0.95, 0.9, 1.0, 0.85, 0.95, 1.0),
     }),
+    baselineTargetShare: baselineTargetShares.ods,
     id: "ods",
     issueOwnership: {
       education: 0.42,
@@ -845,6 +861,7 @@ export const parties: PartySeed[] = [
       width: latent8(0.68, 0.7, 0.68, 0.7, 0.65, 0.62, 0.62),
       salience: latent8(0.75, 0.7, 0.6, 1.15, 1.15, 0.75, 1.05),
     }),
+    baselineTargetShare: baselineTargetShares.stan,
     id: "stan",
     issueOwnership: {
       education: 0.52,
@@ -917,6 +934,7 @@ export const parties: PartySeed[] = [
       width: latent8(0.58, 0.45, 0.5, 0.62, 0.58, 0.52, 0.56),
       salience: latent8(0.8, 1.3, 1.05, 1.0, 1.15, 1.2, 1.05),
     }),
+    baselineTargetShare: baselineTargetShares.pirates,
     id: "pirates",
     issueOwnership: {
       climate: 0.52,
@@ -989,6 +1007,7 @@ export const parties: PartySeed[] = [
       width: latent8(0.54, 0.48, 0.58, 0.64, 0.62, 0.58, 0.58),
       salience: latent8(0.75, 1.25, 0.8, 0.95, 0.85, 0.65, 0.85),
     }),
+    baselineTargetShare: baselineTargetShares.kdu,
     id: "kdu",
     issueOwnership: {
       education: 0.56,
@@ -1058,9 +1077,10 @@ export const parties: PartySeed[] = [
       center: latent8(-0.12, 0.88, 0.82, -0.82, -0.88, -0.62, -0.82),
       flexibility: 0.36,
       originCenter: latent8(-0.12, 0.88, 0.82, -0.82, -0.88, -0.62, -0.82),
-      width: latent8(0.62, 0.42, 0.42, 0.44, 0.38, 0.48, 0.38),
+      width: latent8(0.64, 0.52, 0.52, 0.56, 0.52, 0.54, 0.52),
       salience: latent8(0.8, 1.35, 1.3, 1.25, 1.45, 0.9, 1.35),
     }),
+    baselineTargetShare: baselineTargetShares.spd,
     id: "spd",
     issueOwnership: {
       industry: 0.48,
@@ -1130,9 +1150,10 @@ export const parties: PartySeed[] = [
       center: latent8(0.82, 0.58, 0.55, -0.38, -0.55, -0.88, -0.38),
       flexibility: 0.58,
       originCenter: latent8(0.82, 0.58, 0.55, -0.38, -0.55, -0.88, -0.38),
-      width: latent8(0.44, 0.52, 0.52, 0.58, 0.5, 0.36, 0.48),
+      width: latent8(0.56, 0.58, 0.58, 0.64, 0.58, 0.52, 0.56),
       salience: latent8(1.35, 0.85, 0.85, 0.85, 1.05, 1.5, 0.8),
     }),
+    baselineTargetShare: baselineTargetShares.motorists,
     id: "motorists",
     issueOwnership: {
       climate: 0.74,
@@ -1205,6 +1226,7 @@ export const parties: PartySeed[] = [
       width: latent8(0.46, 0.56, 0.58, 0.56, 0.5, 0.52, 0.48),
       salience: latent8(1.3, 0.8, 0.65, 1.15, 1.25, 0.75, 1.25),
     }),
+    baselineTargetShare: baselineTargetShares.top09,
     id: "top09",
     issueOwnership: {
       climate: 0.35,
@@ -1814,6 +1836,7 @@ export function createInitialGameState(): GameState {
   ) as Record<PartyId, PartyRuntime>;
 
   const initialState: GameState = {
+    baselineCalibrated: false,
     campaignActionsV2,
     coalitionRelations,
     events,

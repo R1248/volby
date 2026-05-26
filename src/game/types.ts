@@ -136,6 +136,7 @@ export type LeaderState = {
 };
 
 export type PartySeed = {
+  baselineTargetShare?: number;
   coalitionBase: Partial<Record<PartyId, number>>;
   color: string;
   field: PartyField;
@@ -689,6 +690,7 @@ export type TurnBriefing = {
 };
 
 export type GameState = {
+  baselineCalibrated?: boolean;
   campaignActionsV2: CampaignActionV2[];
   coalitionRelations: CoalitionRelation[];
   events: EventCard[];
