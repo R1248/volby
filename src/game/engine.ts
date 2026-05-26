@@ -525,6 +525,7 @@ function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceRes
     existingIndex >= 0
       ? existingResults.map((item, index) => (index === existingIndex ? publicMediaResult(appliedResult) : item)).slice(0, 20)
       : [publicMediaResult(appliedResult), ...existingResults].slice(0, 20);
+  const baseAlienationModifiers = baseAlienationClusterModifiers(state, appliedResult);
   state.mediaClusterModifiers = [
     ...appliedResult.clusterImpacts
       .filter((impact) => Math.abs(impact.supportDelta) > 0.0004)
@@ -535,6 +536,7 @@ function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceRes
         sourceInvitationId: appliedResult.invitationId,
         weekApplied: state.week,
       })),
+    ...baseAlienationModifiers,
     ...(state.mediaClusterModifiers ?? []).filter((modifier) => modifier.expiresWeek >= state.week),
   ].slice(0, 60);
 
@@ -545,23 +547,103 @@ function applyMediaAppearanceResult(state: GameState, result: MediaAppearanceRes
   runtime.field.amplitude = clamp(runtime.field.amplitude + appliedResult.partyMomentumDelta * 0.8, 0.35, 1.8);
   runtime.momentum = clamp((runtime.momentum ?? 0.5) + appliedResult.partyMomentumDelta, 0, 1);
 
-  if (appliedResult.controversyTriggered) {
-    runtime.mediaVulnerability = clamp((runtime.mediaVulnerability ?? 0) + 0.035, 0, 1);
-    runtime.scandalRisk = clamp(runtime.scandalRisk + 0.025, 0, 1);
+  const baseAlienationRisk = appliedResult.partyOutletFit?.baseAlienationRisk ?? 0;
+  if (baseAlienationRisk > 0.35) {
+    runtime.reputation.authenticity = clamp(runtime.reputation.authenticity - baseAlienationRisk * 0.012, 0, 1);
+    runtime.reputation.consistency = clamp(runtime.reputation.consistency - baseAlienationRisk * 0.008, 0, 1);
+  }
+
+  const toxicOutletScandalRisk = appliedResult.partyOutletFit?.scandalRisk ?? (appliedResult.controversyTriggered ? 0.35 : 0);
+  const scandalProbabilityScore = clamp(
+    toxicOutletScandalRisk * 0.65 +
+      (appliedResult.controversyTriggered ? 0.25 : 0) -
+      Math.max(0, appliedResult.miniGameCompetenceAdjustment ?? 0) * 0.05 -
+      Math.max(0, appliedResult.miniGameAnswerQualityScore ?? 0) * 0.05,
+    0,
+    1,
+  );
+
+  if (appliedResult.controversyTriggered || toxicOutletScandalRisk > 0.52) {
+    runtime.mediaVulnerability = clamp((runtime.mediaVulnerability ?? 0) + 0.012 + toxicOutletScandalRisk * 0.035, 0, 1);
+    runtime.scandalRisk = clamp(runtime.scandalRisk + Math.max(0, scandalProbabilityScore - 0.48) * 0.045, 0, 1);
+  }
+
+  if (scandalProbabilityScore > 0.62) {
     state.scandals.push({
-      evidence: 0.2,
+      evidence: clamp(0.18 + toxicOutletScandalRisk * 0.32, 0.2, 0.55),
       id: `media-controversy-${state.week}-${appliedResult.invitationId}`,
-      legalExposure: 0.03,
+      legalExposure: clamp(0.015 + toxicOutletScandalRisk * 0.08, 0.02, 0.12),
       resolved: false,
       sourceOutletId: state.mediaInvitations.find((invitation) => invitation.id === appliedResult.invitationId)?.outletId,
       targetPartyId: 'player',
-      title: 'Dozvuky kontroverzniho medialniho vystoupeni',
-      traceability: 0.64,
+      title: 'Dozvuky rizikoveho medialniho vystoupeni',
+      traceability: clamp(0.54 + toxicOutletScandalRisk * 0.28, 0.58, 0.86),
       truthStatus: 'mixed',
-      severity: 0.22,
-      virality: 0.42,
+      severity: clamp(0.18 + toxicOutletScandalRisk * 0.28, 0.2, 0.5),
+      virality: clamp(0.32 + toxicOutletScandalRisk * 0.3 + (appliedResult.controversyTriggered ? 0.08 : 0), 0.36, 0.72),
     });
   }
+}
+
+function baseAlienationClusterModifiers(state: GameState, result: MediaAppearanceResult) {
+  const fit = result.partyOutletFit;
+  if (!fit || fit.baseAlienationRisk <= 0.35) {
+    return [];
+  }
+  const invitation = state.mediaInvitations.find((item) => item.id === result.invitationId);
+  const outlet = state.media.find((item) => item.id === invitation?.outletId) ?? mediaOutlets.find((item) => item.id === invitation?.outletId);
+  const partyCenter = state.partyRuntime.player.field.center8D;
+  if (!outlet || !partyCenter) {
+    return [];
+  }
+
+  const outletVector = mediaOutletLatentVector(outlet);
+  return voterClusters
+    .map((cluster) => {
+      const coreFit = latentFitForMedia(partyCenter, cluster.ideologyMean, state.partyRuntime.player.field.salience8D);
+      const outletClusterFit = latentFitForMedia(cluster.ideologyMean, outletVector);
+      const rejection = clamp(1 - outletClusterFit + fit.toxicityRisk * 0.25 - (outlet.mainstreamLegitimacy ?? 0) * 0.18, 0, 1);
+      return {
+        amount: -round4(clamp(fit.baseAlienationRisk * coreFit * rejection * 0.012, 0, 0.018)),
+        clusterId: cluster.id,
+        expiresWeek: state.week + 3,
+        sourceInvitationId: result.invitationId,
+        weekApplied: state.week,
+      };
+    })
+    .filter((modifier) => modifier.amount < -0.0004)
+    .slice(0, 5);
+}
+
+function mediaOutletLatentVector(outlet: NonNullable<GameState['media'][number]>) {
+  const controversy = outlet.controversy ?? outlet.sensationalism;
+  const toxicity = outlet.toxicity ?? clamp(Math.max(0, 0.55 - outlet.credibility) * 0.28 + Math.max(0, controversy - 0.58) * 0.42 + Math.max(0, outlet.sensationalism - 0.72) * 0.2, 0.03, 0.9);
+  const institutionalTaboo = outlet.institutionalTaboo ?? clamp(Math.max(0, 0.55 - outlet.credibility) * 0.4 + Math.max(0, controversy - 0.62) * 0.35 + Math.max(0, outlet.sensationalism - 0.78) * 0.2, 0.02, 0.9);
+  const mainstreamLegitimacy = outlet.mainstreamLegitimacy ?? clamp(outlet.kind === 'public_tv' ? 0.9 : outlet.credibility * 0.62 + (1 - outlet.sensationalism) * 0.18, 0.05, 0.95);
+  const antiSystemFit = outlet.antiSystemFit ?? clamp((outlet.audienceByCluster?.anti_establishment_online ?? 0) * 1.8 + Math.max(0, -outlet.editorialVector.econ) * 0.12 + controversy * 0.25, 0, 1);
+  const progressiveFit = outlet.progressiveFit ?? clamp((outlet.audienceByCluster?.young_urban_progressives ?? 0) * 1.45 + (outlet.audienceByCluster?.urban_liberal_professionals ?? 0) * 0.55 + Math.max(0, -outlet.editorialVector.culture) * 0.42, 0, 1);
+  const nationalConservativeFit =
+    outlet.nationalConservativeFit ?? clamp((outlet.audienceByCluster?.rural_conservatives ?? 0) * 1.4 + (outlet.audienceByCluster?.working_class_protest ?? 0) * 0.55 + Math.max(0, outlet.editorialVector.culture) * 0.35, 0, 1);
+  return {
+    authority: outlet.editorialVector.authority,
+    culture: outlet.editorialVector.culture,
+    econ: outlet.editorialVector.econ,
+    establishment: clamp(mainstreamLegitimacy * 1.35 - antiSystemFit * 1.1 - institutionalTaboo * 0.35 - toxicity * 0.18, -1, 1),
+    globalism: clamp(progressiveFit * 0.55 + mainstreamLegitimacy * 0.25 - antiSystemFit * 0.7 - nationalConservativeFit * 0.45, -1, 1),
+    green: clamp(progressiveFit * 0.8 - nationalConservativeFit * 0.35 - antiSystemFit * 0.25, -1, 1),
+    ukraine: clamp(mainstreamLegitimacy * 0.55 + progressiveFit * 0.25 - antiSystemFit * 0.5 - institutionalTaboo * 0.35, -1, 1),
+  };
+}
+
+function latentFitForMedia(left: LatentVector8D, right: LatentVector8D, salience?: Partial<LatentVector8D>) {
+  let weightedDistance = 0;
+  let totalWeight = 0;
+  for (const dimension of latentDimensions8D) {
+    const weight = salience?.[dimension] ?? (dimension === 'econ' || dimension === 'culture' || dimension === 'authority' ? 1 : 0.85);
+    weightedDistance += Math.abs((left[dimension] ?? 0) - (right[dimension] ?? 0)) * weight;
+    totalWeight += weight;
+  }
+  return clamp(1 - weightedDistance / Math.max(0.001, totalWeight * 1.55), 0, 1);
 }
 
 function applyReputationDelta(reputation: ReputationVector, delta?: Partial<ReputationVector>) {
@@ -1097,6 +1179,15 @@ function applyPendingMediaEffects(state: GameState, mediaNotes: string[], riskNo
     mediaNotes.push(`Medialni sentiment ${sentiment.rating}/5 (${sentiment.label}): ${sentiment.summary}`);
     if (result.controversyTriggered) {
       riskNotes.push('Kontroverzni medialni vystup se propsal do tydenniho rizika.');
+    }
+    if (result.mediaRiskWarnings?.baseAlienation) {
+      riskNotes.push('Riziko odcizeni vlastniho jadra.');
+    }
+    if (result.mediaRiskWarnings?.toxicScandal) {
+      riskNotes.push('Riziko reputacni kauzy.');
+    }
+    if (result.mediaRiskWarnings?.mismatch) {
+      riskNotes.push('Riziko nepresvedciveho presahu mimo vlastni bublinu.');
     }
   }
 
@@ -1652,6 +1743,10 @@ function randomFromSeed(seed: number) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function round4(value: number) {
+  return Math.round(value * 10000) / 10000;
 }
 
 function clamp(value: number, min: number, max: number) {

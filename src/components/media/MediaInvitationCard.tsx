@@ -37,9 +37,9 @@ export function MediaInvitationCard({ gameState, invitation, minigameQuestions =
     setSoundbiteSolution(undefined);
   }, [invitation.id]);
 
-  const speakerOptions = useMemo(
+  const speakerOptions = useMemo<SpeakerRole[]>(
     () =>
-      (invitation.recommendedSpeakerRoles?.length ? invitation.recommendedSpeakerRoles : ['leader', 'regionalFigure']).filter(
+      (invitation.recommendedSpeakerRoles?.length ? invitation.recommendedSpeakerRoles : (['leader', 'regionalFigure'] satisfies SpeakerRole[])).filter(
         (role, index, roles) => roles.indexOf(role) === index,
       ),
     [invitation.recommendedSpeakerRoles],
@@ -231,12 +231,29 @@ function SentimentResult({ result }: { result?: MediaAppearanceResult }) {
             {sentimentTitle} {result.status === 'pending' ? 'ceka' : 'zapocteno'}
           </Text>
           <Text style={styles.sentimentText}>{result.sentimentSummary}</Text>
+          {mediaRiskWarningTexts(result).map((text) => (
+            <Text key={text} style={styles.programWarning}>{text}</Text>
+          ))}
           {result.programWarning ? <Text style={styles.programWarning}>{result.programWarning.text}</Text> : null}
           <Text style={styles.sentimentHint}>Presny dopad se projevi v tydennim vyhodnoceni.</Text>
         </>
       ) : null}
     </View>
   );
+}
+
+function mediaRiskWarningTexts(result?: MediaAppearanceResult) {
+  const warnings: string[] = [];
+  if (result?.mediaRiskWarnings?.baseAlienation) {
+    warnings.push('Riziko odcizeni vlastniho jadra');
+  }
+  if (result?.mediaRiskWarnings?.toxicScandal) {
+    warnings.push('Riziko reputacni kauzy');
+  }
+  if (result?.mediaRiskWarnings?.mismatch) {
+    warnings.push('Riziko nepresvedciveho presahu mimo vlastni bublinu');
+  }
+  return warnings;
 }
 
 function ChipGroup({

@@ -9,10 +9,12 @@ import type {
   MediaMiniGameAnswer,
   MediaMiniGameQuestion,
   MediaMiniGameResult,
+  MediaPartyOutletFit,
   MediaFormat,
   MediaInvitation,
   MediaOutlet,
   MediaPreparationLevel,
+  PartyId,
   MediaSentimentRating,
   ReputationVector,
   SpeakerRole,
@@ -20,6 +22,7 @@ import type {
 } from './types';
 
 const supportScale = 0.08;
+const latentDimensions = ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine'] as const;
 
 export const mediaFormatProfiles: Record<MediaFormat, { impactMultiplier: number; name: string; riskMultiplier: number; salienceMultiplier: number }> = {
   interview: { name: 'Rozhovor', impactMultiplier: 1, riskMultiplier: 0.85, salienceMultiplier: 0.8 },
@@ -79,6 +82,74 @@ export const speakerRoleProfiles: Record<
   },
 };
 
+export function calculatePartyOutletFit(state: GameState, outlet: MediaOutlet, partyId: PartyId): MediaPartyOutletFit {
+  const party = state.partyRuntime[partyId];
+  const center = party?.field.center8D;
+  if (!party || !center) {
+    const defaults = outletRiskDefaults(outlet);
+    return {
+      antiSystemFit: round4(defaults.antiSystemFit * 0.4),
+      baseAlienationRisk: round4((1 - defaults.mainstreamLegitimacy * 0.7) * 0.25),
+      baseFit: round4(0.5),
+      ideologicalFit: round4(0.5),
+      mainstreamFit: round4(defaults.mainstreamLegitimacy * 0.5),
+      mismatchRisk: round4(0.35),
+      scandalRisk: round4(clamp(defaults.toxicity * 0.62 + defaults.institutionalTaboo * 0.34, 0, 1)),
+      toxicityRisk: round4(defaults.toxicity),
+    };
+  }
+
+  const defaults = outletRiskDefaults(outlet);
+  const outletVector = outletLatentVector(outlet);
+  const editorialFit = latentFit(center, outletVector, party.field.salience8D);
+  const audienceVector = outletAudienceVector(outlet);
+  const audienceIdeologicalFit = audienceVector ? latentFit(center, audienceVector, party.field.salience8D) : editorialFit;
+  const ideologicalFit = clamp(editorialFit * 0.58 + audienceIdeologicalFit * 0.42, 0, 1);
+
+  const antiSystemParty = clamp((-center.establishment * 0.5 - center.globalism * 0.25 + center.authority * 0.15 + center.culture * 0.1 + 0.55) / 1.45, 0, 1);
+  const progressiveParty = clamp((-center.culture * 0.28 - center.authority * 0.22 + center.green * 0.24 + center.globalism * 0.2 + center.ukraine * 0.14 + 0.55) / 1.65, 0, 1);
+  const nationalConservativeParty = clamp((center.culture * 0.3 + center.authority * 0.25 - center.globalism * 0.2 - center.green * 0.12 - center.establishment * 0.08 + 0.55) / 1.5, 0, 1);
+  const partyMainstream = clamp((center.establishment * 0.45 + center.globalism * 0.16 + center.ukraine * 0.18 + party.reputation.trust * 0.26 + party.reputation.integrity * 0.18 + 0.28) / 1.45, 0, 1);
+
+  const styleFit = clamp(
+    defaults.antiSystemFit * antiSystemParty +
+      defaults.progressiveFit * progressiveParty +
+      defaults.nationalConservativeFit * nationalConservativeParty +
+      defaults.mainstreamLegitimacy * partyMainstream * 0.7,
+    0,
+    1,
+  );
+  const ideologicalAndStyleFit = clamp(ideologicalFit * 0.62 + styleFit * 0.38, 0, 1);
+  const baseFit = calculateBaseFit(state, outlet, ideologicalAndStyleFit, center, party.field.salience8D, defaults);
+  const mainstreamFit = clamp(defaults.mainstreamLegitimacy * (0.45 + partyMainstream * 0.55), 0, 1);
+  const antiSystemFit = clamp(defaults.antiSystemFit * (0.35 + antiSystemParty * 0.65), 0, 1);
+  const toxicityRisk = defaults.toxicity;
+  const tabooRisk = defaults.institutionalTaboo;
+  const ideologicalMismatch = 1 - ideologicalAndStyleFit;
+  const baseAlienationRisk = clamp((1 - baseFit) * (0.55 + ideologicalMismatch * 0.45) * (1 - defaults.mainstreamLegitimacy * 0.7), 0, 1);
+  const mismatchRisk = clamp(ideologicalMismatch * 0.45 + (1 - baseFit) * 0.28 + Math.max(0, defaults.controversy - 0.45) * 0.18 + toxicityRisk * 0.12, 0, 1);
+  const scandalRisk = clamp(
+    toxicityRisk * 0.58 +
+      tabooRisk * 0.34 +
+      Math.max(0, defaults.controversy - 0.72) * 0.08 +
+      Math.max(0, 0.35 - defaults.credibility) * 0.12 -
+      Math.max(0, baseFit - 0.62) * 0.08,
+    0,
+    1,
+  );
+
+  return {
+    antiSystemFit: round4(antiSystemFit),
+    baseAlienationRisk: round4(baseAlienationRisk),
+    baseFit: round4(baseFit),
+    ideologicalFit: round4(ideologicalAndStyleFit),
+    mainstreamFit: round4(mainstreamFit),
+    mismatchRisk: round4(mismatchRisk),
+    scandalRisk: round4(scandalRisk),
+    toxicityRisk: round4(toxicityRisk),
+  };
+}
+
 export function generateWeeklyMediaInvitations(state: GameState, rngSeed = state.rngSeed): MediaInvitation[] {
   const existingIds = new Set(state.mediaInvitations.filter((invitation) => invitation.week === state.week).map((invitation) => invitation.id));
   const count = 1 + Math.floor(randomFromSeed(rngSeed + state.week * 97) * 3);
@@ -131,6 +202,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
   const expectedReach = (invitation.expectedReach ?? outlet.baseReach ?? outlet.reach) * speakerProfile.reachMultiplier;
   const topicId = invitation.issueId ?? programTopicFromLegacy(invitation.issue);
   const topicAffinityMultiplier = 0.85 + ((outlet.topicAffinity as Partial<Record<ProgramIssueId, number>> | undefined)?.[topicId] ?? 0.45) * 0.3;
+  const partyOutletFit = calculatePartyOutletFit(state, outlet, state.playerPartyId ?? 'player');
 
   const clusterImpacts = voterClusters.map((cluster) => {
     const audienceByCluster = outlet.audienceByCluster as Partial<Record<string, number>> | undefined;
@@ -140,7 +212,7 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     const audienceShare = audienceByCluster?.[cluster.id] ?? audienceMix?.[cluster.id] ?? 0;
     const trust = trustByCluster?.[cluster.id] ?? 0.45;
     const topicRelevance = issueSensitivity[topicId] ?? fallbackTopicRelevance(topicId, cluster);
-    const controversyPenalty = controversyPenaltyForCluster(outlet, trust, speakerRole, format, decision.preparationLevel, audienceShare, expectedReach);
+    const controversyPenalty = controversyPenaltyForCluster(outlet, cluster, trust, speakerRole, format, decision.preparationLevel, audienceShare, expectedReach, partyOutletFit);
     const impact =
       expectedReach *
         audienceShare *
@@ -212,6 +284,12 @@ export function resolveMediaAppearance(decision: MediaAppearanceDecision, state:
     miniGameCompetenceAdjustment: decision.miniGameResult?.competenceAdjustment,
     miniGameConsistencyAdjustment: decision.miniGameResult?.consistencyAdjustment,
     miniGameFiscalCredibilityScore: decision.miniGameResult?.fiscalCredibilityScore,
+    mediaRiskWarnings: {
+      baseAlienation: partyOutletFit.baseAlienationRisk > 0.35,
+      mismatch: partyOutletFit.mismatchRisk > 0.48,
+      toxicScandal: partyOutletFit.scandalRisk > 0.62,
+    },
+    partyOutletFit,
     partyMomentumDelta: round4(weightedImpact * 6 - (controversyTriggered ? 0.025 : 0)),
     programEffects: decision.miniGameResult?.impliedProgramEffects ?? [],
     reputationDelta: reputationDeltaFor(speakerRole, successScore, controversyTriggered, speakerProfile.competenceMultiplier),
@@ -525,11 +603,13 @@ function programFitScore(answer: MediaMiniGameAnswer, state: GameState) {
   }
   const axis = answer.impliedAxisPosition;
   const center = state.partyRuntime.player.field.center8D;
-  for (const [dimension, impliedPosition] of Object.entries(axis ?? {}) as [keyof NonNullable<MediaMiniGameAnswer['impliedAxisPosition']>, number][]) {
-    const current = center[dimension];
-    if (typeof current !== 'number') continue;
-    score += clamp(1 - Math.abs(impliedPosition - current) / 1.8, -1, 1) * 0.6;
-    count += 1;
+  if (center) {
+    for (const [dimension, impliedPosition] of Object.entries(axis ?? {}) as [keyof NonNullable<MediaMiniGameAnswer['impliedAxisPosition']>, number][]) {
+      const current = center[dimension];
+      if (typeof current !== 'number') continue;
+      score += clamp(1 - Math.abs(impliedPosition - current) / 1.8, -1, 1) * 0.6;
+      count += 1;
+    }
   }
   if (answer.answerType === 'pivot' || answer.tone === 'evasive') {
     score -= 0.25;
@@ -791,27 +871,152 @@ function preparationImpact(level: MediaPreparationLevel, required: number) {
   return clamp(0.86 + value * 0.28 - Math.max(0, required - value) * 0.22, 0.72, 1.15);
 }
 
+function outletRiskDefaults(outlet: MediaOutlet) {
+  const controversy = outlet.controversy ?? outlet.sensationalism;
+  const credibilityGap = Math.max(0, 0.55 - outlet.credibility);
+  const isPublic = outlet.kind === 'public_tv';
+  const mainstreamLegitimacy = outlet.mainstreamLegitimacy ?? clamp(isPublic ? 0.9 : outlet.credibility * 0.62 + (1 - outlet.sensationalism) * 0.18, 0.05, 0.95);
+  return {
+    antiSystemFit: outlet.antiSystemFit ?? clamp((outlet.audienceByCluster?.anti_establishment_online ?? 0) * 1.8 + Math.max(0, -outlet.editorialVector.econ) * 0.12 + controversy * 0.25, 0, 1),
+    controversy,
+    credibility: outlet.credibility,
+    institutionalTaboo: outlet.institutionalTaboo ?? clamp(credibilityGap * 0.4 + Math.max(0, controversy - 0.62) * 0.35 + Math.max(0, outlet.sensationalism - 0.78) * 0.2, 0.02, 0.9),
+    mainstreamLegitimacy,
+    nationalConservativeFit:
+      outlet.nationalConservativeFit ?? clamp((outlet.audienceByCluster?.rural_conservatives ?? 0) * 1.4 + (outlet.audienceByCluster?.working_class_protest ?? 0) * 0.55 + Math.max(0, outlet.editorialVector.culture) * 0.35, 0, 1),
+    progressiveFit:
+      outlet.progressiveFit ?? clamp((outlet.audienceByCluster?.young_urban_progressives ?? 0) * 1.45 + (outlet.audienceByCluster?.urban_liberal_professionals ?? 0) * 0.55 + Math.max(0, -outlet.editorialVector.culture) * 0.42, 0, 1),
+    toxicity: outlet.toxicity ?? clamp(credibilityGap * 0.28 + Math.max(0, controversy - 0.58) * 0.42 + Math.max(0, outlet.sensationalism - 0.72) * 0.2, 0.03, 0.9),
+  };
+}
+
+function outletLatentVector(outlet: MediaOutlet) {
+  const defaults = outletRiskDefaults(outlet);
+  return {
+    authority: outlet.editorialVector.authority,
+    culture: outlet.editorialVector.culture,
+    econ: outlet.editorialVector.econ,
+    establishment: clamp(defaults.mainstreamLegitimacy * 1.35 - defaults.antiSystemFit * 1.1 - defaults.institutionalTaboo * 0.35, -1, 1),
+    globalism: clamp(defaults.progressiveFit * 0.55 + defaults.mainstreamLegitimacy * 0.25 - defaults.antiSystemFit * 0.7 - defaults.nationalConservativeFit * 0.45, -1, 1),
+    green: clamp(defaults.progressiveFit * 0.8 - defaults.nationalConservativeFit * 0.35 - defaults.antiSystemFit * 0.25, -1, 1),
+    ukraine: clamp(defaults.mainstreamLegitimacy * 0.55 + defaults.progressiveFit * 0.25 - defaults.antiSystemFit * 0.5 - defaults.institutionalTaboo * 0.35, -1, 1),
+  };
+}
+
+function outletAudienceVector(outlet: MediaOutlet) {
+  const audienceByCluster = outlet.audienceByCluster as Partial<Record<string, number>> | undefined;
+  if (!audienceByCluster) {
+    return undefined;
+  }
+  const totals = Object.fromEntries(latentDimensions.map((dimension) => [dimension, 0])) as Record<(typeof latentDimensions)[number], number>;
+  let totalWeight = 0;
+  for (const cluster of voterClusters) {
+    const weight = audienceByCluster[cluster.id] ?? 0;
+    if (weight <= 0) {
+      continue;
+    }
+    totalWeight += weight;
+    for (const dimension of latentDimensions) {
+      totals[dimension] += cluster.ideologyMean[dimension] * weight;
+    }
+  }
+  if (totalWeight <= 0) {
+    return undefined;
+  }
+  for (const dimension of latentDimensions) {
+    totals[dimension] = totals[dimension] / totalWeight;
+  }
+  return totals;
+}
+
+function calculateBaseFit(
+  state: GameState,
+  outlet: MediaOutlet,
+  ideologicalFit: number,
+  partyCenter: NonNullable<GameState['partyRuntime'][PartyId]['field']['center8D']>,
+  salience: GameState['partyRuntime'][PartyId]['field']['salience8D'],
+  defaults: ReturnType<typeof outletRiskDefaults>,
+) {
+  const trustByCluster = outlet.trustByCluster as Partial<Record<string, number>> | undefined;
+  const audienceByCluster = outlet.audienceByCluster as Partial<Record<string, number>> | undefined;
+  let weightedAcceptability = 0;
+  let totalCoreWeight = 0;
+
+  for (const cluster of voterClusters) {
+    const coreFit = latentFit(partyCenter, cluster.ideologyMean, salience);
+    const coreWeight = cluster.size * Math.pow(coreFit, 3.2);
+    if (coreWeight <= 0.0001) {
+      continue;
+    }
+    const trust = trustByCluster?.[cluster.id] ?? 0.42;
+    const audienceShare = audienceByCluster?.[cluster.id] ?? 0;
+    const clusterOutletFit = latentFit(cluster.ideologyMean, outletLatentVector(outlet));
+    const institutionalAcceptance = defaults.mainstreamLegitimacy * (0.42 + Math.max(0, cluster.ideologyMean.establishment) * 0.28);
+    const acceptability = clamp(
+      trust * 0.34 +
+        Math.min(1, audienceShare * 2.4) * 0.2 +
+        clusterOutletFit * 0.24 +
+        ideologicalFit * 0.1 +
+        institutionalAcceptance * 0.22 -
+        defaults.toxicity * 0.22 -
+        defaults.institutionalTaboo * 0.16,
+      0,
+      1,
+    );
+    weightedAcceptability += acceptability * coreWeight;
+    totalCoreWeight += coreWeight;
+  }
+
+  if (totalCoreWeight <= 0) {
+    return clamp(ideologicalFit * 0.7 + defaults.mainstreamLegitimacy * 0.3, 0, 1);
+  }
+  return clamp(weightedAcceptability / totalCoreWeight, 0, 1);
+}
+
+function latentFit(
+  left: Record<(typeof latentDimensions)[number], number>,
+  right: Record<(typeof latentDimensions)[number], number>,
+  salience?: Partial<Record<(typeof latentDimensions)[number], number>>,
+) {
+  let weightedDistance = 0;
+  let totalWeight = 0;
+  for (const dimension of latentDimensions) {
+    const weight = salience?.[dimension] ?? (dimension === 'econ' || dimension === 'culture' || dimension === 'authority' ? 1 : 0.85);
+    weightedDistance += Math.abs((left[dimension] ?? 0) - (right[dimension] ?? 0)) * weight;
+    totalWeight += weight;
+  }
+  return clamp(1 - weightedDistance / Math.max(0.001, totalWeight * 1.55), 0, 1);
+}
+
 function controversyPenaltyForCluster(
   outlet: MediaOutlet,
+  cluster: VoterCluster,
   trust: number,
   speakerRole: SpeakerRole,
   format: MediaFormat,
   preparationLevel: MediaPreparationLevel,
   audienceShare: number,
   expectedReach: number,
+  fit: MediaPartyOutletFit,
 ) {
-  const controversy = outlet.controversy ?? outlet.sensationalism;
+  const defaults = outletRiskDefaults(outlet);
+  const controversy = defaults.controversy;
   const speakerRisk = speakerRole === 'controversialFigure' ? 0.18 : speakerRole === 'leader' ? 0.06 : 0;
   const prepRelief = preparationLevel === 'strong' ? 0.55 : preparationLevel === 'basic' ? 0.8 : 1;
   const baseControversyPenalty =
     Math.max(0, controversy - 0.34) * Math.max(0.05, 0.62 - trust) * mediaFormatProfiles[format].riskMultiplier * prepRelief +
     speakerRisk * Math.max(0, 0.55 - trust);
+  const establishmentSensitivity = clamp(cluster.ideologyMean.establishment * 0.7 + cluster.ideologyMean.globalism * 0.2 + cluster.ideologyMean.ukraine * 0.22 + 0.45, 0.05, 1);
+  const toxicityBacklash = defaults.toxicity * (0.12 + establishmentSensitivity * 0.22) + defaults.institutionalTaboo * establishmentSensitivity * 0.14;
+  const mainstreamRelief = 1 - defaults.mainstreamLegitimacy * 0.62;
   const publicSpillover = clamp(
-    outlet.sensationalism * 0.12 + controversy * 0.1 + expectedReach * 0.08 + mediaFormatProfiles[format].riskMultiplier * 0.04,
+    (outlet.sensationalism * 0.08 + controversy * 0.06 + defaults.toxicity * 0.18 + defaults.institutionalTaboo * 0.12 + expectedReach * 0.06 + mediaFormatProfiles[format].riskMultiplier * 0.035) *
+      mainstreamRelief,
     0.04,
     0.3,
   );
-  return baseControversyPenalty * (0.45 + audienceShare * 0.55) + baseControversyPenalty * publicSpillover;
+  const baseAlienationPenalty = fit.baseAlienationRisk * Math.max(0, latentFit(cluster.ideologyMean, outletLatentVector(outlet)) < 0.45 ? 0.018 : 0) * (1 - defaults.mainstreamLegitimacy * 0.7);
+  return baseControversyPenalty * (0.45 + audienceShare * 0.55) + baseControversyPenalty * publicSpillover + toxicityBacklash * publicSpillover + baseAlienationPenalty;
 }
 
 function effectiveRisk(

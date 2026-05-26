@@ -16,7 +16,7 @@ import {
 } from '../src/game/engine';
 import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
-import { mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
+import { calculatePartyOutletFit, mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
 import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
 
@@ -144,8 +144,10 @@ assert(mediaCardSource.includes('migration: { migration: 0.8 }') && mediaCardSou
 
 const publicDebateOutlet = mediaOutlets.find((outlet) => outlet.id === 'public_tv_main_debate');
 const toxicOutlet = mediaOutlets.find((outlet) => outlet.id === 'anti_establishment_channel');
+const foreignPropagandaOutlet = mediaOutlets.find((outlet) => outlet.id === 'foreign_propaganda_channel');
+const progressiveOutlet = mediaOutlets.find((outlet) => outlet.id === 'progressive_activist_magazine');
 const regionalOutlet = mediaOutlets.find((outlet) => outlet.id === 'regional_radio');
-assert(publicDebateOutlet && toxicOutlet && regionalOutlet, 'Expected media outlets for decline tests');
+assert(publicDebateOutlet && toxicOutlet && foreignPropagandaOutlet && progressiveOutlet && regionalOutlet, 'Expected media outlets for decline and fit tests');
 const highReachDebate = testInvitation('decline-high', publicDebateOutlet.id, 'taxes', 'debate', 0.82, 0.62, 'three_questions_timed');
 const lowReachRegional = testInvitation('decline-low', regionalOutlet.id, 'energyPrices', 'regional', 0.18, 0.2, null);
 const toxicPodcast = testInvitation('decline-toxic', toxicOutlet.id, 'nationalSovereignty', 'podcast', 0.35, 0.86, 'hostile_interview');
@@ -195,6 +197,134 @@ const antiHealthcareInAudience =
   (antiHealthcareResult.clusterImpacts.find((impact) => impact.clusterId === 'anti_establishment_online')?.impact ?? 0) +
   (antiHealthcareResult.clusterImpacts.find((impact) => impact.clusterId === 'working_class_protest')?.impact ?? 0);
 assert(antiSovereigntyInAudience > antiHealthcareInAudience, 'Anti-establishment channel should have stronger in-audience impact for sovereignty than unrelated expert issues');
+
+const nationalistAntiSystemCenter = {
+  authority: 0.55,
+  culture: 0.65,
+  econ: -0.15,
+  establishment: -0.86,
+  globalism: -0.68,
+  green: -0.45,
+  ukraine: -0.55,
+};
+const progressiveCenter = {
+  authority: -0.58,
+  culture: -0.78,
+  econ: -0.18,
+  establishment: 0.18,
+  globalism: 0.78,
+  green: 0.78,
+  ukraine: 0.75,
+};
+const spdLikeState = stateWithPlayerCenter(baseState, nationalistAntiSystemCenter);
+const pirateLikeState = stateWithPlayerCenter(baseState, progressiveCenter);
+const spdAntiFit = calculatePartyOutletFit(spdLikeState, toxicOutlet, 'player');
+const pirateAntiFit = calculatePartyOutletFit(pirateLikeState, toxicOutlet, 'player');
+const spdPublicFit = calculatePartyOutletFit(spdLikeState, publicDebateOutlet, 'player');
+const spdProgressiveFit = calculatePartyOutletFit(spdLikeState, progressiveOutlet, 'player');
+const pirateProgressiveFit = calculatePartyOutletFit(pirateLikeState, progressiveOutlet, 'player');
+const pirateForeignFit = calculatePartyOutletFit(pirateLikeState, foreignPropagandaOutlet, 'player');
+const spdForeignFit = calculatePartyOutletFit(spdLikeState, foreignPropagandaOutlet, 'player');
+assert(spdAntiFit.scandalRisk < 0.62, 'SPD-like party in PL-like anti-establishment channel should not be scandalous solely from outlet controversy');
+assert(spdAntiFit.baseFit > pirateAntiFit.baseFit, 'PL-like anti-establishment channel should fit nationalist anti-system base better than progressive base');
+assert(spdPublicFit.baseAlienationRisk < 0.25, 'Public TV mainstream legitimacy should suppress anti-system base alienation');
+assert(spdProgressiveFit.baseAlienationRisk > spdAntiFit.baseAlienationRisk, 'SPD-like party in progressive activist outlet should create base alienation');
+assert(spdProgressiveFit.scandalRisk < 0.45, 'Low-toxicity progressive activist outlet should not automatically become a global scandal');
+assert(pirateProgressiveFit.baseAlienationRisk < spdProgressiveFit.baseAlienationRisk, 'Progressive party should be a natural fit for progressive activist outlet');
+assert(pirateAntiFit.baseAlienationRisk > pirateProgressiveFit.baseAlienationRisk, 'Progressive party in PL-like outlet should create base alienation/mismatch');
+assert(pirateAntiFit.scandalRisk < pirateForeignFit.scandalRisk, 'PL-like outlet should be less scandalous than Sputnik-like toxic outlet for progressive party');
+assert(spdForeignFit.scandalRisk > 0.62 && pirateForeignFit.scandalRisk > 0.62, 'Sputnik-like toxic outlet should produce high scandal risk across party types');
+
+const spdAntiInvitation = testInvitation('spd-anti-fit', toxicOutlet.id, 'nationalSovereignty', 'podcast', 0.35, 0.86, null);
+const spdAntiPendingState = initializeComputedState({ ...spdLikeState, mediaInvitations: [spdAntiInvitation] });
+const spdAntiPending = respondToMediaAppearance(spdAntiPendingState, {
+  action: 'accept',
+  invitationId: spdAntiInvitation.id,
+  preparationLevel: 'basic',
+  speakerRole: 'controversialFigure',
+});
+const spdAntiPendingResult = spdAntiPending.pendingMediaEffects?.[0];
+assert(spdAntiPendingResult?.status === 'pending', 'Party-outlet fit media effects should still be pending');
+assert(JSON.stringify(spdAntiPending.nationalSupport) === JSON.stringify(spdAntiPendingState.nationalSupport), 'Party-outlet fit media should not change support immediately');
+const spdAntiImpact = spdAntiPendingResult.clusterImpacts.find((impact) => impact.clusterId === 'anti_establishment_online');
+const spdWorkingImpact = spdAntiPendingResult.clusterImpacts.find((impact) => impact.clusterId === 'working_class_protest');
+const spdLiberalImpact = spdAntiPendingResult.clusterImpacts.find((impact) => impact.clusterId === 'urban_liberal_professionals');
+assert((spdAntiImpact?.impact ?? -1) > 0 || (spdWorkingImpact?.impact ?? -1) > 0, 'SPD-like party in PL-like outlet should be able to help anti-system/protest audience');
+assert((spdLiberalImpact?.impact ?? 1) < (spdAntiImpact?.impact ?? 0), 'PL-like outlet should still hurt or underperform among liberal/pro-institutional clusters');
+const spdAntiResolved = resolveTurn(spdAntiPending, [], 321).state;
+assert(
+  !spdAntiResolved.scandals.some((scandal) => scandal.id.includes(spdAntiInvitation.id)),
+  'SPD-like party in PL-like outlet should not automatically create a media scandal from controversy alone',
+);
+
+const spdPublicInvitation = testInvitation('spd-public-fit', publicDebateOutlet.id, 'taxes', 'debate', 0.82, 0.62, null);
+const spdPublicPending = respondToMediaAppearance(initializeComputedState({ ...spdLikeState, mediaInvitations: [spdPublicInvitation] }), {
+  action: 'accept',
+  invitationId: spdPublicInvitation.id,
+  preparationLevel: 'basic',
+  speakerRole: 'leader',
+});
+assert(!spdPublicPending.pendingMediaEffects?.[0]?.mediaRiskWarnings?.baseAlienation, 'Public TV should not warn about core alienation solely because anti-system voters distrust it');
+
+const spdProgressiveInvitation = testInvitation('spd-progressive-fit', progressiveOutlet.id, 'climate', 'podcast', 0.28, 0.46, null);
+const spdProgressivePending = respondToMediaAppearance(initializeComputedState({ ...spdLikeState, mediaInvitations: [spdProgressiveInvitation] }), {
+  action: 'accept',
+  invitationId: spdProgressiveInvitation.id,
+  preparationLevel: 'basic',
+  speakerRole: 'leader',
+});
+const spdProgressiveResult = spdProgressivePending.pendingMediaEffects?.[0];
+assert(spdProgressiveResult?.mediaRiskWarnings?.baseAlienation, 'SPD-like party in Alarm-like outlet should warn about base alienation');
+const spdProgressiveResolved = resolveTurn(spdProgressivePending, [], 322).state;
+assert(
+  (spdProgressiveResolved.mediaClusterModifiers ?? []).some((modifier) => ['anti_establishment_online', 'working_class_protest', 'rural_conservatives'].includes(modifier.clusterId) && modifier.amount < 0),
+  'Alarm-like mismatch should create negative delayed modifiers among nationalist/anti-system base clusters',
+);
+assert(
+  !spdProgressiveResolved.scandals.some((scandal) => scandal.id.includes(spdProgressiveInvitation.id)),
+  'Low-toxicity Alarm-like mismatch should not necessarily create a global scandal',
+);
+
+const pirateProgressiveInvitation = testInvitation('pirate-progressive-fit', progressiveOutlet.id, 'climate', 'podcast', 0.28, 0.46, null);
+const pirateProgressiveResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: pirateProgressiveInvitation.id, preparationLevel: 'basic', speakerRole: 'leader' },
+  initializeComputedState({ ...pirateLikeState, mediaInvitations: [pirateProgressiveInvitation] }),
+);
+assert(!pirateProgressiveResult.mediaRiskWarnings?.baseAlienation, 'Pirate-like party in Alarm-like outlet should be low-risk/natural fit');
+
+const pirateAntiInvitation = testInvitation('pirate-anti-fit', toxicOutlet.id, 'nationalSovereignty', 'podcast', 0.35, 0.86, null);
+const pirateAntiResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: pirateAntiInvitation.id, preparationLevel: 'basic', speakerRole: 'leader' },
+  initializeComputedState({ ...pirateLikeState, mediaInvitations: [pirateAntiInvitation] }),
+);
+assert(pirateAntiResult.mediaRiskWarnings?.baseAlienation || pirateAntiResult.mediaRiskWarnings?.mismatch, 'Pirate-like party in PL-like outlet should warn about base alienation or mismatch');
+assert(!pirateAntiResult.mediaRiskWarnings?.toxicScandal, 'PL-like outlet should not be treated as a Sputnik-like toxic scandal by default');
+
+const foreignInvitation = testInvitation('foreign-toxic-fit', foreignPropagandaOutlet.id, 'nationalSovereignty', 'podcast', 0.24, 0.9, null);
+const foreignResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: foreignInvitation.id, preparationLevel: 'basic', speakerRole: 'leader' },
+  initializeComputedState({ ...spdLikeState, mediaInvitations: [foreignInvitation] }),
+);
+const foreignCenterImpact = foreignResult.clusterImpacts.find((impact) => impact.clusterId === 'centrist_swing_voters');
+const foreignLiberalImpact = foreignResult.clusterImpacts.find((impact) => impact.clusterId === 'urban_liberal_professionals');
+const foreignAntiImpact = foreignResult.clusterImpacts.find((impact) => impact.clusterId === 'anti_establishment_online');
+assert(foreignResult.mediaRiskWarnings?.toxicScandal, 'Sputnik-like toxic outlet should warn about reputational scandal risk');
+assert((foreignCenterImpact?.controversyPenalty ?? 0) > (foreignAntiImpact?.controversyPenalty ?? 1) * 0.6, 'Sputnik-like toxicity should spill over into center/pro-institutional backlash');
+assert((foreignLiberalImpact?.impact ?? 1) < (foreignAntiImpact?.impact ?? 0), 'Sputnik-like backlash should hit liberal/pro-institutional clusters harder than hard anti-system audience');
+const foreignResolved = resolveTurn(
+  respondToMediaAppearance(initializeComputedState({ ...spdLikeState, mediaInvitations: [foreignInvitation] }), {
+    action: 'accept',
+    invitationId: foreignInvitation.id,
+    preparationLevel: 'basic',
+    speakerRole: 'leader',
+  }),
+  [],
+  323,
+).state;
+assert(
+  foreignResolved.scandals.some((scandal) => scandal.id.includes(foreignInvitation.id)),
+  'Sputnik-like toxic outlet should create high media scandal risk after delayed application',
+);
 
 const hostileQuestions = selectMediaMiniGameQuestions(highReachDebate, publicDebateOutlet, declineState);
 assert(hostileQuestions.length === 3, 'three_questions_timed should select three questions');
@@ -744,6 +874,24 @@ const seatTotal = partyIds.reduce((sum, partyId) => sum + seats[partyId], 0);
 assert(seatTotal === 200, `Final election seats must sum to 200, got ${seatTotal}`);
 
 console.log('Engine smoke tests passed');
+
+function stateWithPlayerCenter(state: GameState, center8D: NonNullable<GameState['partyRuntime']['player']['field']['center8D']>): GameState {
+  return initializeComputedState({
+    ...state,
+    partyRuntime: {
+      ...state.partyRuntime,
+      player: {
+        ...state.partyRuntime.player,
+        field: {
+          ...state.partyRuntime.player.field,
+          center8D: { ...center8D },
+          latentCenter: { ...center8D },
+        },
+        reputation: { ...state.partyRuntime.player.reputation },
+      },
+    },
+  });
+}
 
 function testInvitation(
   id: string,

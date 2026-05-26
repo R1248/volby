@@ -33,7 +33,15 @@ export type IssueId =
   | 'greenDeal'
   | 'taxes';
 
-export type PartyId = 'player' | 'civicFront' | 'greenFuture' | 'laborUnion' | 'regionalVoice';
+export type PartyId =
+  | 'player'
+  | 'ods'
+  | 'stan'
+  | 'pirates'
+  | 'kdu'
+  | 'spd'
+  | 'motorists'
+  | 'top09';
 
 export type SegmentId = string;
 
@@ -303,14 +311,19 @@ export type CampaignTurnoutModifier = {
 export type MediaOutlet = {
   audienceMix: Partial<Record<SegmentId, number>>;
   audienceByCluster?: Partial<Record<SegmentId, number>>;
+  antiSystemFit?: number;
   credibility: number;
   controversy?: number;
   description?: string;
   editorialVector: Vec3;
   id: string;
+  institutionalTaboo?: number;
   kind: 'public_tv' | 'commercial_tv' | 'radio' | 'tabloid' | 'digital' | 'regional';
+  mainstreamLegitimacy?: number;
+  nationalConservativeFit?: number;
   preferredFormats?: MediaFormat[];
   name: string;
+  progressiveFit?: number;
   reach: number;
   baseReach?: number;
   regionIds?: RegionId[];
@@ -319,8 +332,20 @@ export type MediaOutlet = {
   scrutiny: number;
   sensationalism: number;
   topicAffinity?: Partial<Record<ProgramIssueId, number>>;
+  toxicity?: number;
   trustByCluster?: Partial<Record<SegmentId, number>>;
   type?: 'tv' | 'newspaper' | 'podcast' | 'influencer' | 'radio' | 'online' | 'expert';
+};
+
+export type MediaPartyOutletFit = {
+  antiSystemFit: number;
+  baseAlienationRisk: number;
+  baseFit: number;
+  ideologicalFit: number;
+  mainstreamFit: number;
+  mismatchRisk: number;
+  scandalRisk: number;
+  toxicityRisk: number;
 };
 
 export type MediaFormat =
@@ -482,10 +507,16 @@ export type MediaAppearanceResult = {
   controversyTriggered: boolean;
   invitationId: string;
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
+  mediaRiskWarnings?: {
+    baseAlienation?: boolean;
+    mismatch?: boolean;
+    toxicScandal?: boolean;
+  };
   miniGameAnswerQualityScore?: number;
   miniGameCompetenceAdjustment?: number;
   miniGameConsistencyAdjustment?: number;
   miniGameFiscalCredibilityScore?: number;
+  partyOutletFit?: MediaPartyOutletFit;
   partyMomentumDelta: number;
   programEffects?: PendingProgramMediaEffect[];
   programWarning?: {

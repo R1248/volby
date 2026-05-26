@@ -1,6 +1,6 @@
 import type { RegionId } from '@/src/types/region';
 
-export type PartyId = 'player' | 'civicFront' | 'greenFuture' | 'laborUnion' | 'regionalVoice';
+export type PartyId = string;
 
 export type Party = {
   color: string;
@@ -17,7 +17,7 @@ export type RegionCampaignData = {
   leadingPartyId: PartyId;
   mediaPresence: number;
   organizationStrength: number;
-  partySupport: Record<PartyId, number>;
+  partySupport: Record<string, number>;
   trend: number;
 };
 
@@ -44,7 +44,7 @@ const support = (
   greenFuture: number,
   laborUnion: number,
   regionalVoice: number,
-): Record<PartyId, number> => ({
+): Record<string, number> => ({
   civicFront,
   greenFuture,
   laborUnion,

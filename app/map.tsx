@@ -20,7 +20,7 @@ export default function MapScreen() {
   const [mapMode, setMapMode] = useState<MapMode>('mySupport');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const selectedRegion = regions.find((region) => region.id === selectedRegionId);
-  const partyColors = useMemo(
+  const partyColors = useMemo<Map<string, string>>(
     () => new Map(gameState.parties.map((party) => [party.id, party.color])),
     [gameState.parties],
   );

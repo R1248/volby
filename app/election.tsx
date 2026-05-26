@@ -12,8 +12,8 @@ export default function ElectionScreen() {
   const electionResult = useMemo(() => computeElectionResult(gameState), [gameState]);
   const finalState = { ...gameState, nationalSupport: electionResult.nationalSupport };
   const seats = electionResult.seats;
-  const coalitionA = coalitionScore(finalState, ['player', 'greenFuture', 'regionalVoice']);
-  const coalitionB = coalitionScore(finalState, ['player', 'civicFront']);
+  const coalitionA = coalitionScore(finalState, ['player', 'spd', 'motorists']);
+  const coalitionB = coalitionScore(finalState, ['ods', 'stan', 'kdu', 'top09']);
 
   return (
     <GameScreen
@@ -43,8 +43,8 @@ export default function ElectionScreen() {
 
       <Card tone="gold">
         <SectionTitle>Koaliční potenciál</SectionTitle>
-        <Text style={styles.note}>NS + ZB + HR: skóre {coalitionA}</Text>
-        <Text style={styles.note}>NS + OF: skóre {coalitionB}</Text>
+        <Text style={styles.note}>ANO + SPD + AUTO: skóre {coalitionA}</Text>
+        <Text style={styles.note}>ODS + STAN + KDU + TOP: skóre {coalitionB}</Text>
         <Text style={styles.note}>Skóre kombinuje mandátovou rezervu, kompatibilitu, reputaci a kontroverze.</Text>
       </Card>
     </GameScreen>
