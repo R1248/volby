@@ -1,6 +1,5 @@
 import type { VoterSegment } from './types';
 import type {
-  CampaignPackage,
   CampaignTripOption,
   DebateAttack,
   DebateResponseOption,
@@ -10,6 +9,7 @@ import type {
   IssueLayerPartyState,
   IssueLayerState,
   IssueRelation,
+  IssueRelationNote,
   LatentDimension,
   LatentVector,
   MediaAnswerOption,
@@ -32,10 +32,23 @@ export const latentDimensions: LatentDimension[] = [
 export const coherenceWeights = {
   agenda: 0.9,
   audience: 0.45,
+  contradiction: 1.2,
   frame: 0.8,
   origin: 0.65,
   residual: 0.35,
   rules: 1.1,
+  tension: 0.75,
+};
+
+export type IssueGraphEvaluation = {
+  audiencePenalty: number;
+  clusterCoherenceBonus: number;
+  contradictionPenalty: number;
+  mobilizationOverlapBonus: number;
+  relationNotes: IssueRelationNote[];
+  rulePenalty: number;
+  sameFamilyBonus: number;
+  unresolvedTensionPenalty: number;
 };
 
 export function deriveLatentFromIssues(
@@ -88,71 +101,128 @@ export function implicationViolation(
   partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
   relation: IssueRelation,
 ) {
-  const from = partyIssues[relation.from];
-  const to = partyIssues[relation.to];
-
-  if (!from || !to) {
-    return 0;
-  }
-
-  const fromExpected = directionValue(relation.expectedFromDirection);
-  const toExpected = directionValue(relation.expectedToDirection);
-  const fromAlignment = fromExpected === 0 ? Math.abs(from.position) / 2 : clamp((from.position * fromExpected) / 2, 0, 1);
-  const toContradiction = toExpected === 0 ? 0 : clamp((-to.position * toExpected) / 2, 0, 1);
-  const toWeakness = toExpected === 0 ? 0 : clamp(1 - (to.position * toExpected) / 2, 0, 1);
-  const salienceModifier = relation.salienceSensitive ? saliencePairModifier(from.salience, to.salience) : 1;
-
-  if (relation.type === 'implies' || relation.type === 'usually_implies') {
-    const strictness = relation.type === 'implies' ? 1 : 0.72;
-    return relation.strength * relation.confidenceForward * strictness * fromAlignment * toContradiction * salienceModifier;
-  }
-
-  if (relation.type === 'excludes') {
-    const toAlignment = toExpected === 0 ? Math.abs(to.position) / 2 : clamp((to.position * toExpected) / 2, 0, 1);
-    return relation.strength * fromAlignment * toAlignment * salienceModifier;
-  }
-
-  if (relation.type === 'tension' || relation.type === 'requires_framing') {
-    const tension = relation.type === 'requires_framing' ? 0.45 : 0.7;
-    return relation.strength * tension * fromAlignment * Math.max(toContradiction, toWeakness * 0.35) * salienceModifier;
-  }
-
-  if (relation.type === 'splits_audience') {
-    const toAlignment = toExpected === 0 ? Math.abs(to.position) / 2 : clamp((to.position * toExpected) / 2, 0, 1);
-    return relation.strength * 0.35 * fromAlignment * toAlignment * salienceModifier;
-  }
-
-  return 0;
+  const evaluation = evaluateIssueGraph(partyIssues, [relation]);
+  return evaluation.rulePenalty + evaluation.contradictionPenalty + evaluation.unresolvedTensionPenalty + evaluation.audiencePenalty;
 }
 
 export function calculateRulePenalty(
   partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
   issueRelations: readonly IssueRelation[],
 ) {
-  return issueRelations.reduce((sum, relation) => sum + implicationViolation(partyIssues, relation), 0);
+  return evaluateIssueGraph(partyIssues, issueRelations).rulePenalty;
+}
+
+export function evaluateIssueGraph(
+  partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
+  issueRelations: readonly IssueRelation[],
+  framings: readonly IssueFraming[] = [],
+): IssueGraphEvaluation {
+  const result: IssueGraphEvaluation = {
+    audiencePenalty: 0,
+    clusterCoherenceBonus: 0,
+    contradictionPenalty: 0,
+    mobilizationOverlapBonus: 0,
+    relationNotes: [],
+    rulePenalty: 0,
+    sameFamilyBonus: 0,
+    unresolvedTensionPenalty: 0,
+  };
+
+  for (const relation of issueRelations) {
+    const from = partyIssues[relation.from];
+    const to = partyIssues[relation.to];
+    if (!from || !to) {
+      continue;
+    }
+
+    const salienceModifier = relation.salienceSensitive ? saliencePairModifier(from.salience, to.salience) : 1;
+    const fromAlignment = relationAlignment(from, relation.expectedFromDirection);
+    const toAlignment = relationAlignment(to, relation.expectedToDirection);
+    const fromContradiction = relationContradiction(from, relation.expectedFromDirection);
+    const toContradiction = relationContradiction(to, relation.expectedToDirection);
+    const compatibleStrength = fromAlignment * toAlignment * salienceModifier;
+
+    if (relation.type === 'implies' || relation.type === 'usually_implies') {
+      const strictness = relation.type === 'implies' ? 1 : 0.72;
+      const forward = relation.strength * relation.confidenceForward * strictness * fromAlignment * toContradiction * salienceModifier;
+      const reverse = relation.strength * relation.confidenceReverse * strictness * 0.85 * toAlignment * fromContradiction * salienceModifier;
+      result.rulePenalty += forward + reverse;
+      addRelationNote(result.relationNotes, relation, forward, 'rule');
+      addRelationNote(result.relationNotes, relation, reverse, 'rule reverse');
+      continue;
+    }
+
+    if (relation.type === 'excludes') {
+      const penalty = relation.strength * relation.confidenceForward * compatibleStrength;
+      result.contradictionPenalty += penalty;
+      addRelationNote(result.relationNotes, relation, penalty, 'contradiction');
+      continue;
+    }
+
+    if (relation.type === 'tension') {
+      const framingRelief = hasUsefulFraming(relation, partyIssues, framings) ? 0.45 : 1;
+      const penalty = relation.strength * relation.confidenceForward * 0.7 * compatibleStrength * framingRelief;
+      result.unresolvedTensionPenalty += penalty;
+      addRelationNote(result.relationNotes, relation, penalty, 'unresolved tension');
+      continue;
+    }
+
+    if (relation.type === 'requires_framing') {
+      const penalty = hasUsefulFraming(relation, partyIssues, framings)
+        ? 0
+        : relation.strength * relation.confidenceForward * 0.55 * compatibleStrength;
+      result.unresolvedTensionPenalty += penalty;
+      addRelationNote(result.relationNotes, relation, penalty, 'missing framing');
+      continue;
+    }
+
+    if (relation.type === 'splits_audience') {
+      const penalty = relation.strength * relation.confidenceForward * 0.45 * compatibleStrength;
+      result.audiencePenalty += penalty;
+      addRelationNote(result.relationNotes, relation, penalty, 'audience split');
+      continue;
+    }
+
+    if (relation.type === 'same_family') {
+      const bonus = relation.strength * relation.confidenceForward * 0.34 * compatibleStrength;
+      result.sameFamilyBonus += bonus;
+      addRelationNote(result.relationNotes, relation, -bonus, 'same family');
+      continue;
+    }
+
+    if (relation.type === 'mobilizes_same_audience') {
+      const bonus = relation.strength * relation.confidenceForward * 0.24 * compatibleStrength;
+      result.mobilizationOverlapBonus += bonus;
+      addRelationNote(result.relationNotes, relation, -bonus, 'mobilization overlap');
+    }
+  }
+
+  result.clusterCoherenceBonus = clamp(result.sameFamilyBonus * 0.65 + result.mobilizationOverlapBonus * 0.45, 0, 0.8);
+  result.relationNotes.sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+  result.relationNotes = result.relationNotes.slice(0, 10);
+  return result;
 }
 
 export function calculateAgendaPenalty(
   partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
   issues: readonly Issue[] = [],
-  campaignPackages: readonly CampaignPackage[] = [],
-  activePackageIds: readonly string[] = [],
+  relations: readonly IssueRelation[] = [],
+  graphEvaluation = evaluateIssueGraph(partyIssues, relations),
 ) {
   const highSalience = Object.values(partyIssues).filter((position) => position.salience >= 3);
   const flagship = Object.values(partyIssues).filter((position) => position.salience >= 4);
-  const activeIssues = new Set(activePackageIds.flatMap((id) => campaignPackages.find((pack) => pack.id === id)?.issueIds ?? []));
   const domains = new Set(
     highSalience
       .map((position) => issues.find((issue) => issue.id === position.issueId)?.domain)
       .filter(Boolean),
   );
-  const packagedHighSalience = highSalience.filter((position) => activeIssues.has(position.issueId)).length;
-  const packageRelief = highSalience.length > 0 ? (packagedHighSalience / highSalience.length) * 0.45 : 0;
   const overload = Math.max(0, highSalience.length - 5) * 0.22 + Math.max(0, flagship.length - 2) * 0.35;
   const unfocused = highSalience.length < 2 ? 0.45 : 0;
   const domainScatter = Math.max(0, domains.size - 3) * 0.18;
+  const basePenalty = overload + unfocused + domainScatter;
+  const clusterRelief = Math.min(basePenalty * 0.55, graphEvaluation.clusterCoherenceBonus);
 
-  return Math.max(0, overload + unfocused + domainScatter - packageRelief);
+  return Math.max(0, basePenalty - clusterRelief);
 }
 
 export function calculateFrameFit(
@@ -223,32 +293,39 @@ export function calculatePartyCoherence(
   issues: readonly Issue[],
   relations: readonly IssueRelation[],
   frames: readonly IdeologicalFrame[],
-  campaignPackages: readonly CampaignPackage[],
   flexibility: number,
+  framings: readonly IssueFraming[] = [],
 ): PartyCoherenceBreakdown {
-  const rulePenalty = calculateRulePenalty(party.currentIssuePositions, relations);
-  const agendaPenalty = calculateAgendaPenalty(party.currentIssuePositions, issues, campaignPackages, party.activeCampaignPackages);
+  const graphEvaluation = evaluateIssueGraph(party.currentIssuePositions, relations, framings);
+  const agendaPenalty = calculateAgendaPenalty(party.currentIssuePositions, issues, relations, graphEvaluation);
   const frameResult = calculateFrameFit(party.currentIssuePositions, frames);
   const originPenalty = calculateOriginPenalty(party.currentIssuePositions, party.originalIssuePositions, flexibility);
   const residualPenalty = calculateResidualPenalty(party.currentIssuePositions, issues);
-  const audiencePenalty = calculateAudiencePenalty(party.currentIssuePositions, relations);
   const totalIncoherence =
-    coherenceWeights.rules * rulePenalty +
+    coherenceWeights.rules * graphEvaluation.rulePenalty +
+    coherenceWeights.contradiction * graphEvaluation.contradictionPenalty +
+    coherenceWeights.tension * graphEvaluation.unresolvedTensionPenalty +
     coherenceWeights.residual * residualPenalty +
     coherenceWeights.frame * frameResult.framePenalty +
     coherenceWeights.origin * originPenalty +
-    coherenceWeights.audience * audiencePenalty +
+    coherenceWeights.audience * graphEvaluation.audiencePenalty +
     coherenceWeights.agenda * agendaPenalty;
 
   return {
     agendaPenalty,
-    audiencePenalty,
-    coherenceScore: Math.round(100 * Math.exp(-totalIncoherence)),
+    audiencePenalty: graphEvaluation.audiencePenalty,
+    clusterCoherenceBonus: graphEvaluation.clusterCoherenceBonus,
+    coherenceScore: Math.min(100, Math.round(100 * Math.exp(-totalIncoherence))),
+    contradictionPenalty: graphEvaluation.contradictionPenalty,
     framePenalty: frameResult.framePenalty,
+    mobilizationOverlapBonus: graphEvaluation.mobilizationOverlapBonus,
     originPenalty,
     residualPenalty,
-    rulePenalty,
+    relationNotes: graphEvaluation.relationNotes,
+    rulePenalty: graphEvaluation.rulePenalty,
+    sameFamilyBonus: graphEvaluation.sameFamilyBonus,
     totalIncoherence,
+    unresolvedTensionPenalty: graphEvaluation.unresolvedTensionPenalty,
   };
 }
 
@@ -259,8 +336,8 @@ export function recalculateIssueLayer(layer: IssueLayerState, flexibility: numbe
     layer.issues,
     layer.relations,
     layer.ideologicalFrames,
-    layer.campaignPackages,
     flexibility,
+    layer.framings,
   );
   const metrics = calculateProgramMetrics(layer.player, layer.issues, layer.framings, coherenceBreakdown);
 
@@ -313,34 +390,6 @@ export function updateIssuePosition(
     'Program upraven',
     'Zmena programu se propsala do citelnosti, koherence a latentni pozice strany.',
   );
-}
-
-export function activateCampaignPackage(layer: IssueLayerState, packageId: string, flexibility: number): IssueLayerState {
-  const pack = layer.campaignPackages.find((candidate) => candidate.id === packageId);
-  if (!pack) {
-    return layer;
-  }
-
-  const currentPositions = { ...layer.player.currentIssuePositions };
-  for (const issueId of pack.issueIds) {
-    const current = currentPositions[issueId];
-    if (current) {
-      currentPositions[issueId] = sanitizeIssuePosition({ ...current, salience: current.salience + 1 });
-    }
-  }
-
-  const nextLayer: IssueLayerState = {
-    ...layer,
-    player: {
-      ...layer.player,
-      activeCampaignPackages: Array.from(new Set([...layer.player.activeCampaignPackages, packageId])).slice(-2),
-      currentIssuePositions: currentPositions,
-      mediaVulnerability: clamp(layer.player.mediaVulnerability + pack.mediaRiskModifier, 0, 1),
-      programLegibility: clamp(layer.player.programLegibility + pack.legibilityBonus, 0, 1),
-    },
-  };
-
-  return withFeedback(recalculateIssueLayer(nextLayer, flexibility), pack.name, 'Balicek zvedl salienci souvisejicich temat a snizil chaos agendy, pokud temata drzi pohromade.');
 }
 
 export function answerProgramMediaQuestion(
@@ -608,8 +657,8 @@ function calculateProgramMetrics(
   }, 0);
 
   return {
-    coreLoyalty: clamp(0.42 + coherence.coherenceScore / 250 + party.activeCampaignPackages.length * 0.03, 0, 1),
-    factionTension: clamp(0.15 + coherence.originPenalty * 0.8 + coherence.rulePenalty * 0.22, 0, 1),
+    coreLoyalty: clamp(0.42 + coherence.coherenceScore / 250, 0, 1),
+    factionTension: clamp(0.15 + coherence.originPenalty * 0.8 + (coherence.rulePenalty + coherence.unresolvedTensionPenalty) * 0.2, 0, 1),
     mediaVulnerability: clamp(0.18 + coherence.totalIncoherence * 0.12 + controversialSalience / 80, 0, 1),
     programLegibility: clamp(0.35 + issueLegibility * 0.35 + framingLegibility - coherence.agendaPenalty * 0.16, 0, 1),
     swingAppeal: clamp(0.34 + coherence.coherenceScore / 300 - coherence.rulePenalty * 0.08 - controversialSalience / 100, 0, 1),
@@ -631,10 +680,52 @@ function calculateResidualPenalty(partyIssues: Record<ProgramIssueId, PartyIssue
   return salienceTotal > 0 ? weightedExtremity / salienceTotal : 0;
 }
 
-function calculateAudiencePenalty(partyIssues: Record<ProgramIssueId, PartyIssuePosition>, relations: readonly IssueRelation[]) {
-  return relations
-    .filter((relation) => relation.type === 'splits_audience')
-    .reduce((sum, relation) => sum + implicationViolation(partyIssues, relation) * 0.7, 0);
+function relationAlignment(position: PartyIssuePosition, expectedDirection?: 'against' | 'pro') {
+  const expected = directionValue(expectedDirection);
+  if (expected === 0) {
+    return Math.abs(position.position) / 2;
+  }
+  return clamp((position.position * expected) / 2, 0, 1);
+}
+
+function relationContradiction(position: PartyIssuePosition, expectedDirection?: 'against' | 'pro') {
+  const expected = directionValue(expectedDirection);
+  if (expected === 0) {
+    return 0;
+  }
+  return clamp((-position.position * expected) / 2, 0, 1);
+}
+
+function hasUsefulFraming(
+  relation: IssueRelation,
+  partyIssues: Record<ProgramIssueId, PartyIssuePosition>,
+  framings: readonly IssueFraming[],
+) {
+  const selectedFramings = [partyIssues[relation.from]?.framingId, partyIssues[relation.to]?.framingId]
+    .map((framingId) => framings.find((framing) => framing.id === framingId))
+    .filter(Boolean) as IssueFraming[];
+
+  return selectedFramings.some(
+    (framing) =>
+      framing.legibilityModifier >= 0.08 ||
+      framing.controversyModifier < 0 ||
+      framing.swingAppealModifier >= 0.06 ||
+      Object.values(framing.dimensionEffects ?? {}).some((value) => Math.abs(value) >= 0.05),
+  );
+}
+
+function addRelationNote(notes: IssueRelationNote[], relation: IssueRelation, score: number, label: string) {
+  if (Math.abs(score) < 0.025) {
+    return;
+  }
+
+  notes.push({
+    description: `${label}: ${relation.description}`,
+    from: relation.from,
+    score,
+    to: relation.to,
+    type: relation.type,
+  });
 }
 
 function inferVoterIssuePreference(segment: VoterSegment, issue: Issue) {

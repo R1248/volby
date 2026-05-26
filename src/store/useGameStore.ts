@@ -4,7 +4,6 @@ import { mediaOutlets } from '@/src/data/mediaOutlets';
 import { campaignActionsV2 } from '@/src/game/campaignActionsV2';
 import {
   acceptSponsor,
-  activateCampaignPackage as applyCampaignPackage,
   answerQuestion,
   answerCampaignTrip as applyCampaignTripAnswer,
   answerDebateAttack as applyDebateAnswer,
@@ -34,7 +33,6 @@ import type { RegionId } from '@/src/types/region';
 
 type GameStore = {
   acceptSponsorOffer: (sponsorId: string) => void;
-  activateCampaignPackage: (packageId: string) => void;
   answerCampaignTrip: (tripId: string, optionId: string) => void;
   answerDebateAttack: (responseId: string) => void;
   answerPendingQuestion: (questionId: string, optionId: string) => void;
@@ -102,7 +100,7 @@ function asFullRealismState(state: GameState): GameState {
   return {
     ...state,
     campaignActionsV2,
-    issueLayer: state.issueLayer ?? createIssueLayerState(),
+    issueLayer: migrateIssueLayer(state.issueLayer ?? createIssueLayerState()),
     marketingAdvisors: state.marketingAdvisors ?? marketingAdvisors,
     media: mediaOutlets,
     mediaAppearanceResults: state.mediaAppearanceResults ?? [],
@@ -111,6 +109,20 @@ function asFullRealismState(state: GameState): GameState {
     partyRuntime,
     publicPollsterId: state.publicPollsterId ?? 'medianPlus',
     turnoutModifiers: state.turnoutModifiers ?? [],
+  };
+}
+
+function migrateIssueLayer(issueLayer: GameState['issueLayer']): GameState['issueLayer'] {
+  const { campaignPackages: _campaignPackages, ...layerWithoutPackages } = issueLayer as GameState['issueLayer'] & {
+    campaignPackages?: unknown[];
+  };
+  const { activeCampaignPackages: _activeCampaignPackages, ...playerWithoutPackages } = layerWithoutPackages.player as typeof layerWithoutPackages.player & {
+    activeCampaignPackages?: string[];
+  };
+
+  return {
+    ...layerWithoutPackages,
+    player: playerWithoutPackages,
   };
 }
 
@@ -180,11 +192,6 @@ function plannedLeaderTime(state: GameState, plannedActions: PlannedAction[]) {
 export const useGameStore = create<GameStore>((set, get) => ({
   acceptSponsorOffer: (sponsorId) => {
     const nextState = acceptSponsor(get().gameState, sponsorId);
-    set({ gameState: nextState });
-    persist(nextState, get().plannedActions);
-  },
-  activateCampaignPackage: (packageId) => {
-    const nextState = applyCampaignPackage(get().gameState, packageId);
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },

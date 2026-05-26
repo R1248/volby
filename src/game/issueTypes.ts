@@ -90,30 +90,33 @@ export type IdeologicalFrame = {
   tolerance: Partial<Record<ProgramIssueId, number>>;
 };
 
-export type CampaignPackage = {
+export type IssueRelationNote = {
   description: string;
-  id: string;
-  issueIds: ProgramIssueId[];
-  legibilityBonus: number;
-  mediaRiskModifier: number;
-  mobilizationBonus: number;
-  name: string;
-  slogan?: string;
+  from: ProgramIssueId;
+  score: number;
+  to: ProgramIssueId;
+  type: IssueRelationType | 'cluster';
 };
 
 export type PartyCoherenceBreakdown = {
   agendaPenalty: number;
   audiencePenalty: number;
+  clusterCoherenceBonus: number;
   coherenceScore: number;
+  contradictionPenalty: number;
   framePenalty: number;
+  mobilizationOverlapBonus: number;
   originPenalty: number;
   residualPenalty: number;
+  relationNotes: IssueRelationNote[];
   rulePenalty: number;
+  sameFamilyBonus: number;
   totalIncoherence: number;
+  unresolvedTensionPenalty: number;
 };
 
 export type IssueLayerPartyState = {
-  activeCampaignPackages: string[];
+  activeCampaignPackages?: string[];
   activeIdeologicalFrame?: string;
   coherenceBreakdown: PartyCoherenceBreakdown;
   coreLoyalty: number;
@@ -206,7 +209,7 @@ export type DebateResponseOption = {
 };
 
 export type IssueLayerState = {
-  campaignPackages: CampaignPackage[];
+  campaignPackages?: unknown[];
   debateAttack?: DebateAttack;
   feedbackLog: ProgramFeedback[];
   framings: IssueFraming[];

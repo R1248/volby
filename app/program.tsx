@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GameScreen } from '@/src/components/layout/GameScreen';
 import { Card, Grid, Metric, SectionTitle } from '@/src/components/ui/StrategyCards';
 import { deriveLatentFromIssues } from '@/src/game/issueEngine';
-import type { Issue, IssueDomain, ProgramIssueId } from '@/src/game/issueTypes';
+import type { Issue, IssueDomain, IssueRelationNote, ProgramIssueId } from '@/src/game/issueTypes';
 import { useGameStore } from '@/src/store/useGameStore';
 import { colors } from '@/src/theme/colors';
 
@@ -39,7 +39,6 @@ const salienceOptions = [
 export default function ProgramScreen() {
   const gameState = useGameStore((state) => state.gameState);
   const updateProgramIssue = useGameStore((state) => state.updateProgramIssue);
-  const activateCampaignPackage = useGameStore((state) => state.activateCampaignPackage);
   const answerProgramMediaQuestion = useGameStore((state) => state.answerProgramMediaQuestion);
   const answerCampaignTrip = useGameStore((state) => state.answerCampaignTrip);
   const answerDebateAttack = useGameStore((state) => state.answerDebateAttack);
@@ -54,6 +53,10 @@ export default function ProgramScreen() {
   );
   const pendingMedia = layer.mediaQuestions.find((question) => question.id === layer.pendingMediaQuestionId);
   const pendingTrip = layer.tripEvents.find((trip) => trip.id === layer.pendingCampaignTripId);
+  const coherence = layer.player.coherenceBreakdown;
+  const activeFrame = layer.ideologicalFrames.find((frame) => frame.id === layer.player.activeIdeologicalFrame);
+  const topPenalties = coherence.relationNotes.filter((note) => note.score > 0).slice(0, 4);
+  const topSynergies = coherence.relationNotes.filter((note) => note.score < 0).slice(0, 4);
 
   if (!selectedIssue || !selectedPosition) {
     return null;
@@ -163,28 +166,36 @@ export default function ProgramScreen() {
 
       <View style={styles.mainGrid}>
         <Card tone="gold">
-          <SectionTitle>Kampanove balicky</SectionTitle>
-          <View style={styles.packageGrid}>
-            {layer.campaignPackages.map((pack) => {
-              const active = layer.player.activeCampaignPackages.includes(pack.id);
-              return (
-                <Pressable key={pack.id} onPress={() => activateCampaignPackage(pack.id)} style={[styles.packageCard, active && styles.packageActive]}>
-                  <Text style={styles.packageTitle}>{pack.name}</Text>
-                  <Text style={styles.packageText}>{pack.description}</Text>
-                  <Text style={styles.packageMeta}>{active ? 'Aktivni' : 'Aktivovat'}</Text>
-                </Pressable>
-              );
-            })}
+          <SectionTitle>Graf temat</SectionTitle>
+          <Text style={styles.graphFrame}>Aktivni ramec: {activeFrame?.name ?? 'Bez jasneho ramce'}</Text>
+          <View style={styles.noteColumns}>
+            <View style={styles.noteColumn}>
+              <Text style={styles.noteHeading}>Nejsilnejsi tresty</Text>
+              {topPenalties.length > 0 ? topPenalties.map((note) => <RelationNote key={`${note.from}-${note.to}-${note.description}`} note={note} />) : (
+                <Text style={styles.noteEmpty}>Bez vyrazneho rozporu</Text>
+              )}
+            </View>
+            <View style={styles.noteColumn}>
+              <Text style={styles.noteHeading}>Nejsilnejsi synergie</Text>
+              {topSynergies.length > 0 ? topSynergies.map((note) => <RelationNote key={`${note.from}-${note.to}-${note.description}`} note={note} />) : (
+                <Text style={styles.noteEmpty}>Bez vyrazne synergie</Text>
+              )}
+            </View>
           </View>
         </Card>
 
         <Card>
-          <SectionTitle>Koherence programu</SectionTitle>
-          <Breakdown label="Pravidla grafu" value={layer.player.coherenceBreakdown.rulePenalty} />
-          <Breakdown label="Ideovy ramec" value={layer.player.coherenceBreakdown.framePenalty} />
-          <Breakdown label="Puvodni identita" value={layer.player.coherenceBreakdown.originPenalty} />
-          <Breakdown label="Preplnena agenda" value={layer.player.coherenceBreakdown.agendaPenalty} />
-          <Breakdown label="Publika v napeti" value={layer.player.coherenceBreakdown.audiencePenalty} />
+          <SectionTitle>Koherence temat</SectionTitle>
+          <Breakdown label="Pravidla grafu" value={coherence.rulePenalty} />
+          <Breakdown label="Kontradikce" value={coherence.contradictionPenalty} />
+          <Breakdown label="Nevyresene napeti" value={coherence.unresolvedTensionPenalty} />
+          <Breakdown label="Publika v napeti" value={coherence.audiencePenalty} />
+          <Breakdown label="Preplnena agenda" value={coherence.agendaPenalty} />
+          <Breakdown label="Ideovy ramec" value={coherence.framePenalty} />
+          <Breakdown label="Puvodni identita" value={coherence.originPenalty} />
+          <Breakdown label="Stejna rodina" value={-coherence.sameFamilyBonus} />
+          <Breakdown label="Mobilizacni prekryv" value={-coherence.mobilizationOverlapBonus} />
+          <Breakdown label="Uleva za cluster" value={-coherence.clusterCoherenceBonus} />
         </Card>
       </View>
 
@@ -272,6 +283,17 @@ function Breakdown({ label, value }: { label: string; value: number }) {
     <View style={styles.breakdownRow}>
       <Text style={styles.breakdownLabel}>{label}</Text>
       <Text style={styles.breakdownValue}>{value.toFixed(2)}</Text>
+    </View>
+  );
+}
+
+function RelationNote({ note }: { note: IssueRelationNote }) {
+  return (
+    <View style={styles.relationNote}>
+      <Text style={styles.relationNoteText}>{note.description}</Text>
+      <Text style={styles.relationNoteMeta}>
+        {note.from} {'>'} {note.to} {formatSigned(note.score)}
+      </Text>
     </View>
   );
 }
@@ -464,6 +486,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
   },
+  graphFrame: {
+    color: colors.primaryDark,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   framingCard: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
@@ -525,39 +552,44 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
-  packageActive: {
-    borderColor: colors.selected,
+  noteColumn: {
+    flex: 1,
+    gap: 7,
+    minWidth: 220,
   },
-  packageCard: {
+  noteColumns: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  noteEmpty: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  noteHeading: {
+    color: colors.primaryDark,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  relationNote: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     padding: 8,
-    width: '48.5%',
   },
-  packageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-  },
-  packageMeta: {
-    color: colors.primaryDark,
-    fontSize: 11,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  packageText: {
+  relationNoteMeta: {
     color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 15,
-    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 3,
   },
-  packageTitle: {
+  relationNoteText: {
     color: colors.primaryDark,
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 15,
   },
   responseGrid: {
     flexDirection: 'row',

@@ -8,7 +8,6 @@ import { generateWeeklyMediaInvitations, resolveMediaAppearance } from './mediaE
 import { voterClusters } from '../data/mediaOutlets';
 import { deriveParliamentAttendancePressure } from './programMandateCatalog';
 import {
-  activateCampaignPackage as activateCampaignPackageInLayer,
   answerCampaignTrip as answerCampaignTripInLayer,
   answerDebateAttack as answerDebateAttackInLayer,
   answerProgramMediaQuestion as answerProgramMediaQuestionInLayer,
@@ -377,15 +376,6 @@ export function updateProgramIssue(
   ensureIssueLayer(nextState);
   const flexibility = nextState.partyRuntime.player.field.flexibility;
   nextState.issueLayer = updateIssuePositionInLayer(nextState.issueLayer, issueId, patch, flexibility);
-  applyIssueLayerToPlayer(nextState);
-
-  return initializeComputedState(nextState);
-}
-
-export function activateCampaignPackage(state: GameState, packageId: string): GameState {
-  const nextState = cloneState(state);
-  ensureIssueLayer(nextState);
-  nextState.issueLayer = activateCampaignPackageInLayer(nextState.issueLayer, packageId, nextState.partyRuntime.player.field.flexibility);
   applyIssueLayerToPlayer(nextState);
 
   return initializeComputedState(nextState);
@@ -795,7 +785,7 @@ function computeParticleUtilityForContext(
     Math.log(Math.max(0.04, runtime.field.amplitude)) +
     Math.log(Math.max(0.001, kernel)) +
     reputationFit +
-    organization * 0.42 -
+    organization * 0.42 +
     programModifier -
     fatiguePenalty -
     scandalPenalty +

@@ -1,5 +1,4 @@
 import type {
-  CampaignPackage,
   CampaignTripEvent,
   IdeologicalFrame,
   Issue,
@@ -169,14 +168,6 @@ export const ideologicalFrames: IdeologicalFrame[] = [
   { id: 'antiBureaucraticProtest', name: 'Proti byrokracii', description: 'Nizke regulace, kritika elit a levne energie.', expectedIssues: { regulation: -1, taxes: -1, greenDeal: -1, energyPrices: 1, directDemocracy: 1 }, tolerance: { nationalSovereignty: 1, lawAndOrder: 1 }, dimensionCenter: { econ: 0.35, establishment: -0.45, globalism: -0.45 } },
 ];
 
-export const campaignPackages: CampaignPackage[] = [
-  { id: 'freedomWithoutBureaucracy', name: 'Svoboda bez byrokracie', description: 'Dane, regulace, statni sprava a protikorupcni pravidla.', issueIds: ['taxes', 'regulation', 'civilServiceReform', 'antiCorruption'], slogan: 'Mene papiru, vice duvery.', legibilityBonus: 0.12, mobilizationBonus: 0.05, mediaRiskModifier: 0.03 },
-  { id: 'secureAffordableEnergy', name: 'Bezpecna a dostupna energie', description: 'Ceny energii, jadro a realisticky prechod.', issueIds: ['energyPrices', 'nuclearEnergy', 'greenDeal', 'coalPhaseout'], slogan: 'Energie, kterou si zeme muze dovolit.', legibilityBonus: 0.1, mobilizationBonus: 0.06, mediaRiskModifier: 0.08 },
-  { id: 'modernLiberalState', name: 'Moderni liberalni stat', description: 'Prava, konopi, profesionalni stat a Evropa.', issueIds: ['sameSexMarriage', 'cannabis', 'civilServiceReform', 'euIntegration'], legibilityBonus: 0.12, mobilizationBonus: 0.05, mediaRiskModifier: 0.05 },
-  { id: 'sovereignSafeCountry', name: 'Suverenni a bezpecna zeme', description: 'Migrace, poradek, suverenita a prima demokracie.', issueIds: ['migration', 'lawAndOrder', 'nationalSovereignty', 'directDemocracy'], legibilityBonus: 0.1, mobilizationBonus: 0.08, mediaRiskModifier: 0.06 },
-  { id: 'fairLivingStandards', name: 'Jiste zivobyti', description: 'Duchody, bydleni, energie a prerozdelovani.', issueIds: ['pensions', 'housing', 'energyPrices', 'redistribution'], legibilityBonus: 0.1, mobilizationBonus: 0.06, mediaRiskModifier: 0.04 },
-];
-
 export const mediaQuestions: MediaQuestion[] = [
   {
     id: 'mq-marriage-freedom',
@@ -319,7 +310,6 @@ export const tripEvents: CampaignTripEvent[] = [
 export function createIssueLayerState(): IssueLayerState {
   const originalIssuePositions = createDefaultIssuePositions();
   const player: IssueLayerPartyState = {
-    activeCampaignPackages: [],
     coherenceBreakdown: emptyCoherence(),
     coreLoyalty: 0.5,
     currentIssuePositions: clonePositions(originalIssuePositions),
@@ -331,7 +321,6 @@ export function createIssueLayerState(): IssueLayerState {
   };
 
   return {
-    campaignPackages,
     debateAttack: undefined,
     feedbackLog: [],
     framings: issueFramings,
@@ -379,12 +368,18 @@ export function emptyCoherence() {
   return {
     agendaPenalty: 0,
     audiencePenalty: 0,
+    clusterCoherenceBonus: 0,
     coherenceScore: 100,
+    contradictionPenalty: 0,
     framePenalty: 0,
+    mobilizationOverlapBonus: 0,
     originPenalty: 0,
     residualPenalty: 0,
+    relationNotes: [],
     rulePenalty: 0,
+    sameFamilyBonus: 0,
     totalIncoherence: 0,
+    unresolvedTensionPenalty: 0,
   };
 }
 
