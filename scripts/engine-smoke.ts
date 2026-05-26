@@ -16,7 +16,7 @@ import {
 } from '../src/game/engine';
 import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
-import { resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
+import { mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
 import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
 
@@ -138,6 +138,9 @@ assert(
   mediaCardSource.includes('ChipGroup') && mediaCardSource.includes('Problem') && mediaCardSource.includes('Hodnota') && mediaCardSource.includes('Reseni'),
   'soundbite_builder should use real chip UI',
 );
+assert(mediaCardSource.includes('housing: { housing: 1.2 }'), 'Housing soundbite should use housing-specific chips');
+assert(mediaCardSource.includes('taxes: { taxes: 1.2 }'), 'Tax soundbite low-tax solution should imply positive taxes position');
+assert(mediaCardSource.includes('migration: { migration: 0.8 }') && mediaCardSource.includes('nationalSovereignty'), 'Soundbite builder should include topic-specific political chips beyond generic rhetoric');
 
 const publicDebateOutlet = mediaOutlets.find((outlet) => outlet.id === 'public_tv_main_debate');
 const toxicOutlet = mediaOutlets.find((outlet) => outlet.id === 'anti_establishment_channel');
@@ -228,6 +231,34 @@ assert((highRevenueAnswer.impliedIssuePosition?.taxes ?? 0) < 0, 'Higher-revenue
 assert((sectorTaxAnswer.impliedIssuePosition?.taxes ?? 0) < 0, 'Property/sector tax answer should not imply low-tax economics');
 assert((lowTaxAnswer.impliedAxisPosition?.econ ?? 0) > 0, 'Low-tax answer should imply econ-right axis');
 assert((highRevenueAnswer.impliedAxisPosition?.econ ?? 0) < 0, 'Higher-revenue answer should imply econ-left axis');
+const lowTaxProgramState = updateProgramIssue(baseState, 'taxes', { position: 2, salience: 4 });
+const taxFactQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-fact-deficit-debt');
+const correctFactAnswer = taxFactQuestion?.options.find((answer) => answer.id === 'deficit-flow-debt-stock');
+const wrongFactAnswer = taxFactQuestion?.options.find((answer) => answer.id === 'same-thing');
+const honestFactAnswer = taxFactQuestion?.options.find((answer) => answer.id === 'not-exact');
+assert(taxFactQuestion && correctFactAnswer && wrongFactAnswer && honestFactAnswer, 'Expected factual tax question answers');
+const correctFactScore = scoreMediaMiniGameAnswers([correctFactAnswer], [taxFactQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'expert',
+  state: declineState,
+});
+const wrongFactScore = scoreMediaMiniGameAnswers([wrongFactAnswer], [taxFactQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+const honestFactScore = scoreMediaMiniGameAnswers([honestFactAnswer], [taxFactQuestion], {
+  invitation: highReachDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+assert((correctFactScore.answerQualityScore ?? 0) > (wrongFactScore.answerQualityScore ?? 0), 'Factually correct answer should score better than a wrong answer');
+assert((correctFactScore.competenceAdjustment ?? 0) > (wrongFactScore.competenceAdjustment ?? 0), 'Factually correct answer should improve competence relative to a wrong answer');
+assert((honestFactScore.answerQualityScore ?? 0) > (wrongFactScore.answerQualityScore ?? 0), 'Honest uncertainty should beat confident false factual claims');
+assert((wrongFactScore.answerQualityScore ?? 0) < 0.35, 'Wrong factual answer should not become good just because it fits ideology');
 const fundedTaxScore = scoreMediaMiniGameAnswers([fundedTaxAnswer], [taxFundingQuestion], {
   invitation: highReachDebate,
   outlet: publicDebateOutlet,
@@ -273,7 +304,6 @@ const populistTaxScore = scoreMediaMiniGameAnswers([populistTaxAnswer], [taxCohe
   state: declineState,
 });
 assert(coherentTaxScore.performanceMultiplier > populistTaxScore.performanceMultiplier, 'Coherent trade-off answer should score better than populist vague answer');
-const lowTaxProgramState = updateProgramIssue(baseState, 'taxes', { position: 2, salience: 4 });
 const lowTaxProgramDebate = testInvitation('tax-commitment-direction', publicDebateOutlet.id, 'taxes', 'debate', 0.82, 0.62, 'three_questions_timed');
 const lowTaxAlignedScore = scoreMediaMiniGameAnswers([lowTaxAnswer], [taxPositionQuestion], {
   invitation: lowTaxProgramDebate,
@@ -289,6 +319,44 @@ const highTaxMismatchScore = scoreMediaMiniGameAnswers([highRevenueAnswer], [tax
 });
 assert((lowTaxAlignedScore.programMismatchPenalty ?? 0) < 0.01, 'Low-tax answer should fit a high positive taxes program position');
 assert((highTaxMismatchScore.programMismatchPenalty ?? 0) > (lowTaxAlignedScore.programMismatchPenalty ?? 0), 'High-tax answer should mismatch a high positive taxes program position');
+assert((lowTaxAlignedScore.answerQualityScore ?? 0) > (highTaxMismatchScore.answerQualityScore ?? 0), 'Low-tax answer should score higher for low-tax/right-wing program');
+const redistributiveProgramState = updateProgramIssue(updateProgramIssue(baseState, 'taxes', { position: -2, salience: 4 }), 'redistribution', { position: 2, salience: 3 });
+const lowTaxMismatchLeftScore = scoreMediaMiniGameAnswers([lowTaxAnswer], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: redistributiveProgramState,
+});
+const highTaxAlignedLeftScore = scoreMediaMiniGameAnswers([highRevenueAnswer], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: redistributiveProgramState,
+});
+assert((highTaxAlignedLeftScore.answerQualityScore ?? 0) > (lowTaxMismatchLeftScore.answerQualityScore ?? 0), 'Redistributive answer should score higher for left/redistributive program');
+const soundbiteLowTaxSolution = {
+  answerType: 'explanation' as const,
+  commitmentStrength: 0.58,
+  id: 'solution-plan',
+  impliedIssuePosition: { taxes: 1.2 },
+  label: 'Plan',
+  performanceDelta: 0.045,
+  text: 'Ukazeme tri konkretni kroky a termin.',
+  tone: 'specific' as const,
+};
+const soundbiteLowTaxFit = scoreMediaMiniGameAnswers([soundbiteLowTaxSolution], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+const soundbiteLowTaxMismatch = scoreMediaMiniGameAnswers([soundbiteLowTaxSolution], [taxPositionQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: redistributiveProgramState,
+});
+assert((soundbiteLowTaxFit.answerQualityScore ?? 0) > (soundbiteLowTaxMismatch.answerQualityScore ?? 0), 'Soundbite score should depend on program fit, not only generic chip quality');
 const taxMismatchPending = respondToMediaAppearance(
   initializeComputedState({
     ...lowTaxProgramState,
@@ -311,6 +379,33 @@ assert(
   taxMismatchResolved.issueLayer.player.currentIssuePositions.taxes.position < lowTaxProgramState.issueLayer.player.currentIssuePositions.taxes.position,
   'High-tax media commitment should shift taxes position downward after resolveTurn',
 );
+const taxProgramConsistencyQuestion = mediaMiniGameQuestions.find((question) => question.id === 'taxes-program-lower-and-spend');
+const taxProgramAlignedAnswer = taxProgramConsistencyQuestion?.options.find((answer) => answer.id === 'tax-cuts-after-savings');
+const taxProgramContradictAnswer = taxProgramConsistencyQuestion?.options.find((answer) => answer.id === 'spending-first-clarify');
+const taxProgramEvasiveAnswer = taxProgramConsistencyQuestion?.options.find((answer) => answer.id === 'avoid-program-detail');
+assert(taxProgramConsistencyQuestion && taxProgramAlignedAnswer && taxProgramContradictAnswer && taxProgramEvasiveAnswer, 'Expected tax program consistency question');
+const taxProgramAlignedScore = scoreMediaMiniGameAnswers([taxProgramAlignedAnswer], [taxProgramConsistencyQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+const taxProgramContradictScore = scoreMediaMiniGameAnswers([taxProgramContradictAnswer], [taxProgramConsistencyQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+const taxProgramEvasiveScore = scoreMediaMiniGameAnswers([taxProgramEvasiveAnswer], [taxProgramConsistencyQuestion], {
+  invitation: lowTaxProgramDebate,
+  outlet: publicDebateOutlet,
+  speakerRole: 'leader',
+  state: lowTaxProgramState,
+});
+assert((taxProgramAlignedScore.programMismatchPenalty ?? 0) < 0.01, 'Program-consistency answer aligned with current program should not create mismatch');
+assert((taxProgramContradictScore.programMismatchPenalty ?? 0) > (taxProgramAlignedScore.programMismatchPenalty ?? 0), 'Contradicting program-consistency answer should create mismatch');
+assert(taxProgramEvasiveScore.performanceMultiplier < taxProgramAlignedScore.performanceMultiplier, 'Evasive program-consistency answer should lower performance');
+assert((taxProgramEvasiveScore.impliedProgramEffects ?? []).length === 0, 'Evasive program-consistency answer should not shift issue position');
 const growthPaysAnswer = taxFundingQuestion.options.find((answer) => answer.id === 'growth-pays');
 assert(growthPaysAnswer, 'Expected vague growth-pays tax answer');
 const fiscallyWeakScore = scoreMediaMiniGameAnswers([growthPaysAnswer], [taxFundingQuestion], {
@@ -345,6 +440,24 @@ const badSentimentResult = resolveMediaAppearance(
   declineState,
 );
 assert((goodSentimentResult.sentimentScore ?? goodSentimentResult.successScore) > (badSentimentResult.sentimentScore ?? badSentimentResult.successScore), 'Good minigame answers should produce better immediate sentiment score than vague/populist answers');
+assert((mediaSentimentFromResult(badSentimentResult).rating ?? 5) < 4, 'High-reach debate with bad answers can score below 4/5 sentiment');
+const mediumOutletForSentiment = mediaOutlets.find((outlet) => outlet.id === 'business_podcast');
+assert(mediumOutletForSentiment, 'Expected business podcast for sentiment test');
+const mediumSentimentInvitation = testInvitation('medium-excellent-sentiment', mediumOutletForSentiment.id, 'taxes', 'podcast', 0.31, 0.32, 'long_form');
+const excellentMediumScore = scoreMediaMiniGameAnswers([correctFactAnswer, fundedTaxAnswer], [taxFactQuestion, taxFundingQuestion], {
+  invitation: mediumSentimentInvitation,
+  outlet: mediumOutletForSentiment,
+  speakerRole: 'expert',
+  state: declineState,
+});
+const excellentMediumResult = resolveMediaAppearance(
+  { action: 'accept', invitationId: mediumSentimentInvitation.id, miniGameResult: excellentMediumScore, preparationLevel: 'strong', speakerRole: 'expert' },
+  initializeComputedState({
+    ...baseState,
+    mediaInvitations: [mediumSentimentInvitation],
+  }),
+);
+assert((mediaSentimentFromResult(excellentMediumResult).rating ?? 0) > 3, 'Medium outlet with excellent answers can score above 3/5 sentiment');
 for (const templateTopic of new Set(mediaInvitationTemplates.map((template) => template.topicId))) {
   const topicQuestions = mediaMiniGameQuestions.filter((question) => question.topicId === templateTopic && !question.isGenericFallback);
   assert(topicQuestions.length >= 3, `Media invitation topic ${templateTopic} should have at least three topic-specific minigame questions`);

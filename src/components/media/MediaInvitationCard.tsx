@@ -301,7 +301,10 @@ function soundbiteSolutions(issueId?: string): MediaMiniGameAnswer[] {
     energyPrices: { energyPrices: 1.2 },
     greenDeal: { greenDeal: 0.75 },
     housing: { housing: 1.2 },
-    taxes: { taxes: -1.2 },
+    migration: { migration: 0.8 },
+    nationalSovereignty: { nationalSovereignty: 1.1 },
+    taxes: { taxes: 1.2 },
+    ukraineSupport: { ukraineSupport: 1 },
   };
   const impliedIssuePosition = topicEffects[issueId ?? ''];
   return [

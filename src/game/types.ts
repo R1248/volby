@@ -354,12 +354,17 @@ export type MediaMiniGameAnswer = {
   consistencyRisk?: number;
   consistencyDelta?: number;
   controversyDelta?: number;
+  factId?: string;
+  factualScore?: number;
+  factTolerance?: number;
+  factValueLabel?: string;
   fiscalCredibilityDelta?: number;
   id: string;
   impliedAxisPosition?: Partial<Record<'econ' | 'culture' | 'authority' | 'establishment' | 'globalism' | 'green' | 'ukraine', number>>;
   impliedFramingId?: Partial<Record<ProgramIssueId, string>>;
   impliedIssuePosition?: Partial<Record<ProgramIssueId, number>>;
   impliedIssueSalience?: Partial<Record<ProgramIssueId, number>>;
+  isFactuallyCorrect?: boolean;
   // Reserved for later richer media scoring; descriptive only today.
   issueSalienceDelta?: Partial<Record<ProgramIssueId, number>>;
   label: string;
@@ -382,12 +387,14 @@ export type MediaMiniGameQuestion = {
   options: MediaMiniGameAnswer[];
   prompt: string;
   questionKind?:
+    | 'factual_check'
     | 'axis_probe'
     | 'issue_position'
     | 'budget_constraint'
     | 'distributional_tradeoff'
     | 'coherence_trap'
     | 'crisis_defense'
+    | 'program_consistency_check'
     | 'rhetorical_explanation';
   severity: 'soft' | 'normal' | 'hard' | 'hostile';
   timeLimitSec?: number;
@@ -395,6 +402,7 @@ export type MediaMiniGameQuestion = {
 };
 
 export type MediaMiniGameResult = {
+  answerQualityScore?: number;
   competenceAdjustment?: number;
   consistencyAdjustment?: number;
   controversyAdjustment?: number;
@@ -474,6 +482,7 @@ export type MediaAppearanceResult = {
   controversyTriggered: boolean;
   invitationId: string;
   issueSalienceDelta: Partial<Record<ProgramIssueId, number>>;
+  miniGameAnswerQualityScore?: number;
   miniGameCompetenceAdjustment?: number;
   miniGameConsistencyAdjustment?: number;
   miniGameFiscalCredibilityScore?: number;
