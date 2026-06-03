@@ -18,7 +18,9 @@
     "test:green-deal": "tsc --outDir .tmp-green-deal --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/green-deal-issue-tests.ts && node .tmp-green-deal/scripts/green-deal-issue-tests.js",
     "test:actions:v2": "tsc --outDir .tmp-actions-v2 --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/action-v2-tests.ts && node .tmp-actions-v2/scripts/action-v2-tests.js",
     "test:regions": "tsc --outDir .tmp-regions --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/regional-tests.ts && node .tmp-regions/scripts/regional-tests.js",
-    "test:simulation": "tsc --outDir .tmp-simulation --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/simulation-tests.ts && node .tmp-simulation/scripts/simulation-tests.js"
+    "test:simulation": "tsc --outDir .tmp-simulation --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/simulation-tests.ts && node .tmp-simulation/scripts/simulation-tests.js",
+    "sanity:model-dimensions": "tsc --outDir .tmp-model-dimensions --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/model-dimensionality-sanity.ts && node .tmp-model-dimensions/scripts/model-dimensionality-sanity.js",
+    "calibrate:voter-field-shifts": "tsc --outDir .tmp-voter-field-shifts --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/calibrate-voter-field-shifts.ts && node .tmp-voter-field-shifts/scripts/calibrate-voter-field-shifts.js"
   },
   "dependencies": {
     "@react-navigation/native": "^7.1.8",
