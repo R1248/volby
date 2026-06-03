@@ -12,6 +12,7 @@ export default function ElectionScreen() {
   const electionResult = useMemo(() => computeElectionResult(gameState), [gameState]);
   const finalState = { ...gameState, nationalSupport: electionResult.nationalSupport };
   const seats = electionResult.seats;
+  const mandateParties = gameState.parties.filter((party) => party.mandateEligible !== false);
   const coalitionA = coalitionScore(finalState, ['player', 'spd', 'motorists']);
   const coalitionB = coalitionScore(finalState, ['ods', 'stan', 'kdu', 'top09']);
 
@@ -22,14 +23,14 @@ export default function ElectionScreen() {
       title="Volební noc"
     >
       <Grid>
-        {gameState.parties.map((party) => (
+        {mandateParties.map((party) => (
           <Metric key={party.id} label={party.shortName} value={`${formatPercent(electionResult.nationalSupport[party.id])} · ${seats[party.id]} mand.`} />
         ))}
       </Grid>
 
       <Card>
         <SectionTitle>Mandátový přepočet</SectionTitle>
-        {gameState.parties.map((party) => (
+        {mandateParties.map((party) => (
           <View key={party.id} style={styles.partyRow}>
             <Text style={styles.partyName}>{party.name}</Text>
             <Text style={styles.partySupport}>{formatPercent(electionResult.nationalSupport[party.id])}</Text>

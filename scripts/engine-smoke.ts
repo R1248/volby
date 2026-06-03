@@ -7,6 +7,7 @@ import {
   answerProgramMediaQuestion,
   answerQuestion,
   computeElectionResult,
+  estimateSeats,
   computeNationalSupport,
   computeRegionalSupport,
   initializeComputedState,
@@ -14,6 +15,7 @@ import {
   resolveTurn,
   updateProgramIssue,
 } from '../src/game/engine';
+import { regionalSanityScore } from '../src/game/calibration/regionalSanityCheck';
 import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
 import { calculatePartyOutletFit, mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
@@ -43,6 +45,15 @@ function assertHealthyState(state: GameState) {
   assert(state.segments.length >= 12, `Expected at least 12 segments, got ${state.segments.length}`);
   assert(state.partyRuntime.player.cash >= 0, 'Player cash must not be negative');
 
+  const nationalSum = partyIds.reduce((total, partyId) => total + state.nationalSupport[partyId], 0);
+  assert(Math.abs(nationalSum - 1) < 0.000001, `National support must sum to 1, got ${nationalSum}`);
+  assert(state.nationalSupport.others > 0, 'Others must have non-zero national support');
+
+  for (const partyId of partyIds) {
+    assert(Number.isFinite(state.nationalSupport[partyId]), `National support for ${partyId} must be finite`);
+    assert(state.partyRuntime[partyId], `Runtime for ${partyId} must exist`);
+  }
+
   for (const region of state.regions) {
     const support = state.regionalSupport[region.id];
     const sum = partyIds.reduce((total, partyId) => total + support[partyId], 0);
@@ -53,11 +64,20 @@ function assertHealthyState(state: GameState) {
       assert(Number.isFinite(value), `Support for ${partyId} in ${region.id} must be finite`);
       assert(value >= 0, `Support for ${partyId} in ${region.id} must not be negative`);
     }
+
+    assert(support.others > 0, `Others must have non-zero support in ${region.id}`);
   }
 }
 
 const baseState = initializeComputedState(createInitialGameState());
 assertHealthyState(baseState);
+const baseSeats = estimateSeats(baseState.nationalSupport);
+assert(baseSeats.others === 0, 'Others must never receive seats');
+const sanity = regionalSanityScore(baseState.regionalSupport);
+assert(Number.isFinite(sanity.maePct), 'Regional sanity MAE must be finite');
+assert(Number.isFinite(sanity.maxErrorPct), 'Regional sanity maxError must be finite');
+assert(sanity.rows.length > 0, 'Regional sanity rows must be present');
+console.log(`Regional sanity: MAE ${sanity.maePct.toFixed(2)} pp, max ${sanity.maxErrorPct.toFixed(2)} pp`);
 for (const partyId of partyIds) {
   const field = baseState.partyRuntime[partyId].field;
   for (const dimension of ['econ', 'culture', 'authority', 'establishment', 'globalism', 'green', 'ukraine'] as const) {
@@ -850,7 +870,8 @@ const resultA = turnA.state;
 const resultB = turnB.state;
 assertHealthyState(resultA);
 assert(JSON.stringify(roundRecord(resultA)) === JSON.stringify(roundRecord(resultB)), 'Same seed and plan must produce the same result');
-assert(turnA.briefing.opponentMoves.length >= partyIds.length - 1, 'Every opponent should resolve a campaign move');
+const activeOpponentCount = resultA.parties.filter((party) => party.id !== 'player' && party.mandateEligible !== false).length;
+assert(turnA.briefing.opponentMoves.length >= activeOpponentCount, 'Every active opponent should resolve a campaign move');
 
 const cappedState = {
   ...baseState,
@@ -872,6 +893,7 @@ assert(questionAfter.controversy > baseState.partyRuntime.player.reputation.cont
 const seats = computeElectionResult(resultA).seats;
 const seatTotal = partyIds.reduce((sum, partyId) => sum + seats[partyId], 0);
 assert(seatTotal === 200, `Final election seats must sum to 200, got ${seatTotal}`);
+assert(seats.others === 0, 'Final election seats must not allocate mandates to others');
 
 console.log('Engine smoke tests passed');
 

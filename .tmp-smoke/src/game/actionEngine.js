@@ -292,7 +292,7 @@ function applyCoalitionEffects(state, plannedAction, action) {
     if (!amount) {
         return;
     }
-    const targetPartyId = plannedAction.targetPartyId ?? 'civicFront';
+    const targetPartyId = plannedAction.targetPartyId ?? state.parties.find((party) => party.id !== 'player')?.id ?? 'ods';
     const relation = findRelation(state, 'player', targetPartyId);
     if (!relation) {
         return;

@@ -49,7 +49,7 @@ export function RegionDetailDrawer({ isOpen, onClose, region }: RegionDetailDraw
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Veřejnoprávní průzkum v kraji</Text>
         {gameState.parties.map((party) => {
-          const value = gameState.regionalSupport[region.id]?.[party.id] ?? data.partySupport[party.id] / 100;
+          const value = gameState.regionalSupport[region.id]?.[party.id] ?? (data.partySupport[party.id] ?? 0) / 100;
 
           return (
             <SupportBar

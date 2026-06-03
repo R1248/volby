@@ -1,4 +1,4 @@
-import { baselineTargetShares, partyIds } from './seed';
+import { baselineTargetShares, parties, partyIds } from './seed';
 import type { RegionId } from '../types/region';
 import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/regionalAggregation';
 import type { VoterPoint } from '../simulation/model/types';
@@ -246,7 +246,10 @@ export function computeElectionResult(state: GameState): ElectionResult {
 }
 
 export function estimateSeats(nationalSupport: Record<PartyId, number>) {
-  const eligible = partyIds.filter((partyId) => nationalSupport[partyId] >= 0.05);
+  const eligible = partyIds.filter((partyId) => {
+    const party = parties.find((item) => item.id === partyId);
+    return party?.mandateEligible !== false && nationalSupport[partyId] >= 0.05;
+  });
   const quotients = eligible.flatMap((partyId) =>
     Array.from({ length: 200 }, (_, index) => ({
       partyId,
@@ -254,6 +257,7 @@ export function estimateSeats(nationalSupport: Record<PartyId, number>) {
     })),
   );
 
+  // TODO(v0.6 mandates): replace national D'Hondt with a realistic regional mandate allocation.
   quotients.sort((a, b) => b.value - a.value);
 
   const seats = Object.fromEntries(partyIds.map((partyId) => [partyId, 0])) as Record<PartyId, number>;
@@ -1257,7 +1261,9 @@ function applyEvents(state: GameState, events: EventCard[], actionEffects: strin
 type OpponentMoveKind = 'attackPlayer' | 'fundraising' | 'leaderTour' | 'mediaAppearance' | 'policyPush' | 'regionalGroundGame';
 
 function applyOpponentMoves(state: GameState, rngSeed: number, opponentMoves: string[], riskNotes: string[]) {
-  const opponents = partyIds.filter((partyId) => partyId !== 'player');
+  const opponents = state.parties
+    .filter((party) => party.id !== 'player' && party.mandateEligible !== false)
+    .map((party) => party.id);
   for (const partyId of opponents) {
     const roll = randomFromSeed(rngSeed + state.week * 31 + partyId.length);
     const region = selectOpponentTargetRegion(state, partyId, rngSeed);

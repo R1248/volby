@@ -5,13 +5,13 @@ exports.deriveLatentFromIssues = deriveLatentFromIssues;
 exports.applyIdeologicalInertia = applyIdeologicalInertia;
 exports.implicationViolation = implicationViolation;
 exports.calculateRulePenalty = calculateRulePenalty;
+exports.evaluateIssueGraph = evaluateIssueGraph;
 exports.calculateAgendaPenalty = calculateAgendaPenalty;
 exports.calculateFrameFit = calculateFrameFit;
 exports.calculateOriginPenalty = calculateOriginPenalty;
 exports.calculatePartyCoherence = calculatePartyCoherence;
 exports.recalculateIssueLayer = recalculateIssueLayer;
 exports.updateIssuePosition = updateIssuePosition;
-exports.activateCampaignPackage = activateCampaignPackage;
 exports.answerProgramMediaQuestion = answerProgramMediaQuestion;
 exports.answerCampaignTrip = answerCampaignTrip;
 exports.answerDebateAttack = answerDebateAttack;
@@ -30,10 +30,12 @@ exports.latentDimensions = [
 exports.coherenceWeights = {
     agenda: 0.9,
     audience: 0.45,
+    contradiction: 1.2,
     frame: 0.8,
     origin: 0.65,
     residual: 0.35,
     rules: 1.1,
+    tension: 0.75,
 };
 function deriveLatentFromIssues(issuePositions, issues, framings = []) {
     const sums = emptyVector();
@@ -63,51 +65,100 @@ function applyIdeologicalInertia(currentLatentPosition, issueDerivedLatentPositi
     }));
 }
 function implicationViolation(partyIssues, relation) {
-    const from = partyIssues[relation.from];
-    const to = partyIssues[relation.to];
-    if (!from || !to) {
-        return 0;
-    }
-    const fromExpected = directionValue(relation.expectedFromDirection);
-    const toExpected = directionValue(relation.expectedToDirection);
-    const fromAlignment = fromExpected === 0 ? Math.abs(from.position) / 2 : clamp((from.position * fromExpected) / 2, 0, 1);
-    const toContradiction = toExpected === 0 ? 0 : clamp((-to.position * toExpected) / 2, 0, 1);
-    const toWeakness = toExpected === 0 ? 0 : clamp(1 - (to.position * toExpected) / 2, 0, 1);
-    const salienceModifier = relation.salienceSensitive ? saliencePairModifier(from.salience, to.salience) : 1;
-    if (relation.type === 'implies' || relation.type === 'usually_implies') {
-        const strictness = relation.type === 'implies' ? 1 : 0.72;
-        return relation.strength * relation.confidenceForward * strictness * fromAlignment * toContradiction * salienceModifier;
-    }
-    if (relation.type === 'excludes') {
-        const toAlignment = toExpected === 0 ? Math.abs(to.position) / 2 : clamp((to.position * toExpected) / 2, 0, 1);
-        return relation.strength * fromAlignment * toAlignment * salienceModifier;
-    }
-    if (relation.type === 'tension' || relation.type === 'requires_framing') {
-        const tension = relation.type === 'requires_framing' ? 0.45 : 0.7;
-        return relation.strength * tension * fromAlignment * Math.max(toContradiction, toWeakness * 0.35) * salienceModifier;
-    }
-    if (relation.type === 'splits_audience') {
-        const toAlignment = toExpected === 0 ? Math.abs(to.position) / 2 : clamp((to.position * toExpected) / 2, 0, 1);
-        return relation.strength * 0.35 * fromAlignment * toAlignment * salienceModifier;
-    }
-    return 0;
+    const evaluation = evaluateIssueGraph(partyIssues, [relation]);
+    return evaluation.rulePenalty + evaluation.contradictionPenalty + evaluation.unresolvedTensionPenalty + evaluation.audiencePenalty;
 }
 function calculateRulePenalty(partyIssues, issueRelations) {
-    return issueRelations.reduce((sum, relation) => sum + implicationViolation(partyIssues, relation), 0);
+    return evaluateIssueGraph(partyIssues, issueRelations).rulePenalty;
 }
-function calculateAgendaPenalty(partyIssues, issues = [], campaignPackages = [], activePackageIds = []) {
+function evaluateIssueGraph(partyIssues, issueRelations, framings = []) {
+    const result = {
+        audiencePenalty: 0,
+        clusterCoherenceBonus: 0,
+        contradictionPenalty: 0,
+        mobilizationOverlapBonus: 0,
+        relationNotes: [],
+        rulePenalty: 0,
+        sameFamilyBonus: 0,
+        unresolvedTensionPenalty: 0,
+    };
+    for (const relation of issueRelations) {
+        const from = partyIssues[relation.from];
+        const to = partyIssues[relation.to];
+        if (!from || !to) {
+            continue;
+        }
+        const salienceModifier = relation.salienceSensitive ? saliencePairModifier(from.salience, to.salience) : 1;
+        const fromAlignment = relationAlignment(from, relation.expectedFromDirection);
+        const toAlignment = relationAlignment(to, relation.expectedToDirection);
+        const fromContradiction = relationContradiction(from, relation.expectedFromDirection);
+        const toContradiction = relationContradiction(to, relation.expectedToDirection);
+        const compatibleStrength = fromAlignment * toAlignment * salienceModifier;
+        if (relation.type === 'implies' || relation.type === 'usually_implies') {
+            const strictness = relation.type === 'implies' ? 1 : 0.72;
+            const forward = relation.strength * relation.confidenceForward * strictness * fromAlignment * toContradiction * salienceModifier;
+            const reverse = relation.strength * relation.confidenceReverse * strictness * 0.85 * toAlignment * fromContradiction * salienceModifier;
+            result.rulePenalty += forward + reverse;
+            addRelationNote(result.relationNotes, relation, forward, 'rule');
+            addRelationNote(result.relationNotes, relation, reverse, 'rule reverse');
+            continue;
+        }
+        if (relation.type === 'excludes') {
+            const penalty = relation.strength * relation.confidenceForward * compatibleStrength;
+            result.contradictionPenalty += penalty;
+            addRelationNote(result.relationNotes, relation, penalty, 'contradiction');
+            continue;
+        }
+        if (relation.type === 'tension') {
+            const framingRelief = hasUsefulFraming(relation, partyIssues, framings) ? 0.45 : 1;
+            const penalty = relation.strength * relation.confidenceForward * 0.7 * compatibleStrength * framingRelief;
+            result.unresolvedTensionPenalty += penalty;
+            addRelationNote(result.relationNotes, relation, penalty, 'unresolved tension');
+            continue;
+        }
+        if (relation.type === 'requires_framing') {
+            const penalty = hasUsefulFraming(relation, partyIssues, framings)
+                ? 0
+                : relation.strength * relation.confidenceForward * 0.55 * compatibleStrength;
+            result.unresolvedTensionPenalty += penalty;
+            addRelationNote(result.relationNotes, relation, penalty, 'missing framing');
+            continue;
+        }
+        if (relation.type === 'splits_audience') {
+            const penalty = relation.strength * relation.confidenceForward * 0.45 * compatibleStrength;
+            result.audiencePenalty += penalty;
+            addRelationNote(result.relationNotes, relation, penalty, 'audience split');
+            continue;
+        }
+        if (relation.type === 'same_family') {
+            const bonus = relation.strength * relation.confidenceForward * 0.34 * compatibleStrength;
+            result.sameFamilyBonus += bonus;
+            addRelationNote(result.relationNotes, relation, -bonus, 'same family');
+            continue;
+        }
+        if (relation.type === 'mobilizes_same_audience') {
+            const bonus = relation.strength * relation.confidenceForward * 0.24 * compatibleStrength;
+            result.mobilizationOverlapBonus += bonus;
+            addRelationNote(result.relationNotes, relation, -bonus, 'mobilization overlap');
+        }
+    }
+    result.clusterCoherenceBonus = clamp(result.sameFamilyBonus * 0.65 + result.mobilizationOverlapBonus * 0.45, 0, 0.8);
+    result.relationNotes.sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+    result.relationNotes = result.relationNotes.slice(0, 10);
+    return result;
+}
+function calculateAgendaPenalty(partyIssues, issues = [], relations = [], graphEvaluation = evaluateIssueGraph(partyIssues, relations)) {
     const highSalience = Object.values(partyIssues).filter((position) => position.salience >= 3);
     const flagship = Object.values(partyIssues).filter((position) => position.salience >= 4);
-    const activeIssues = new Set(activePackageIds.flatMap((id) => campaignPackages.find((pack) => pack.id === id)?.issueIds ?? []));
     const domains = new Set(highSalience
         .map((position) => issues.find((issue) => issue.id === position.issueId)?.domain)
         .filter(Boolean));
-    const packagedHighSalience = highSalience.filter((position) => activeIssues.has(position.issueId)).length;
-    const packageRelief = highSalience.length > 0 ? (packagedHighSalience / highSalience.length) * 0.45 : 0;
     const overload = Math.max(0, highSalience.length - 5) * 0.22 + Math.max(0, flagship.length - 2) * 0.35;
     const unfocused = highSalience.length < 2 ? 0.45 : 0;
     const domainScatter = Math.max(0, domains.size - 3) * 0.18;
-    return Math.max(0, overload + unfocused + domainScatter - packageRelief);
+    const basePenalty = overload + unfocused + domainScatter;
+    const clusterRelief = Math.min(basePenalty * 0.55, graphEvaluation.clusterCoherenceBonus);
+    return Math.max(0, basePenalty - clusterRelief);
 }
 function calculateFrameFit(partyIssues, frames) {
     let bestFrame;
@@ -155,33 +206,40 @@ function calculateOriginPenalty(currentIssuePositions, originalIssuePositions, p
     const flexibilityRelief = 0.35 + partyFlexibility * 0.8;
     return weight > 0 ? total / weight / flexibilityRelief : 0;
 }
-function calculatePartyCoherence(party, issues, relations, frames, campaignPackages, flexibility) {
-    const rulePenalty = calculateRulePenalty(party.currentIssuePositions, relations);
-    const agendaPenalty = calculateAgendaPenalty(party.currentIssuePositions, issues, campaignPackages, party.activeCampaignPackages);
+function calculatePartyCoherence(party, issues, relations, frames, flexibility, framings = []) {
+    const graphEvaluation = evaluateIssueGraph(party.currentIssuePositions, relations, framings);
+    const agendaPenalty = calculateAgendaPenalty(party.currentIssuePositions, issues, relations, graphEvaluation);
     const frameResult = calculateFrameFit(party.currentIssuePositions, frames);
     const originPenalty = calculateOriginPenalty(party.currentIssuePositions, party.originalIssuePositions, flexibility);
     const residualPenalty = calculateResidualPenalty(party.currentIssuePositions, issues);
-    const audiencePenalty = calculateAudiencePenalty(party.currentIssuePositions, relations);
-    const totalIncoherence = exports.coherenceWeights.rules * rulePenalty +
+    const totalIncoherence = exports.coherenceWeights.rules * graphEvaluation.rulePenalty +
+        exports.coherenceWeights.contradiction * graphEvaluation.contradictionPenalty +
+        exports.coherenceWeights.tension * graphEvaluation.unresolvedTensionPenalty +
         exports.coherenceWeights.residual * residualPenalty +
         exports.coherenceWeights.frame * frameResult.framePenalty +
         exports.coherenceWeights.origin * originPenalty +
-        exports.coherenceWeights.audience * audiencePenalty +
+        exports.coherenceWeights.audience * graphEvaluation.audiencePenalty +
         exports.coherenceWeights.agenda * agendaPenalty;
     return {
         agendaPenalty,
-        audiencePenalty,
-        coherenceScore: Math.round(100 * Math.exp(-totalIncoherence)),
+        audiencePenalty: graphEvaluation.audiencePenalty,
+        clusterCoherenceBonus: graphEvaluation.clusterCoherenceBonus,
+        coherenceScore: Math.min(100, Math.round(100 * Math.exp(-totalIncoherence))),
+        contradictionPenalty: graphEvaluation.contradictionPenalty,
         framePenalty: frameResult.framePenalty,
+        mobilizationOverlapBonus: graphEvaluation.mobilizationOverlapBonus,
         originPenalty,
         residualPenalty,
-        rulePenalty,
+        relationNotes: graphEvaluation.relationNotes,
+        rulePenalty: graphEvaluation.rulePenalty,
+        sameFamilyBonus: graphEvaluation.sameFamilyBonus,
         totalIncoherence,
+        unresolvedTensionPenalty: graphEvaluation.unresolvedTensionPenalty,
     };
 }
 function recalculateIssueLayer(layer, flexibility) {
     const frame = calculateFrameFit(layer.player.currentIssuePositions, layer.ideologicalFrames);
-    const coherenceBreakdown = calculatePartyCoherence(layer.player, layer.issues, layer.relations, layer.ideologicalFrames, layer.campaignPackages, flexibility);
+    const coherenceBreakdown = calculatePartyCoherence(layer.player, layer.issues, layer.relations, layer.ideologicalFrames, flexibility, layer.framings);
     const metrics = calculateProgramMetrics(layer.player, layer.issues, layer.framings, coherenceBreakdown);
     return {
         ...layer,
@@ -204,68 +262,68 @@ function updateIssuePosition(layer, issueId, patch, flexibility) {
     if (!current) {
         return layer;
     }
+    const maxChanges = layer.player.maxProgramChangesPerWeek ?? 3;
+    const usedChanges = layer.player.programChangesThisWeek ?? 0;
+    if (usedChanges >= maxChanges) {
+        return layer;
+    }
+    const nextPosition = sanitizeIssuePosition({ ...current, ...patch });
+    if (nextPosition.position === current.position &&
+        nextPosition.salience === current.salience &&
+        nextPosition.rigidity === current.rigidity &&
+        nextPosition.framingId === current.framingId) {
+        return layer;
+    }
     const nextLayer = {
         ...layer,
         player: {
             ...layer.player,
             currentIssuePositions: {
                 ...layer.player.currentIssuePositions,
-                [issueId]: sanitizeIssuePosition({ ...current, ...patch }),
+                [issueId]: nextPosition,
             },
+            programChangesThisWeek: usedChanges + 1,
         },
     };
     return withFeedback(recalculateIssueLayer(nextLayer, flexibility), 'Program upraven', 'Zmena programu se propsala do citelnosti, koherence a latentni pozice strany.');
 }
-function activateCampaignPackage(layer, packageId, flexibility) {
-    const pack = layer.campaignPackages.find((candidate) => candidate.id === packageId);
-    if (!pack) {
-        return layer;
-    }
-    const currentPositions = { ...layer.player.currentIssuePositions };
-    for (const issueId of pack.issueIds) {
-        const current = currentPositions[issueId];
-        if (current) {
-            currentPositions[issueId] = sanitizeIssuePosition({ ...current, salience: current.salience + 1 });
-        }
-    }
-    const nextLayer = {
-        ...layer,
-        player: {
-            ...layer.player,
-            activeCampaignPackages: Array.from(new Set([...layer.player.activeCampaignPackages, packageId])).slice(-2),
-            currentIssuePositions: currentPositions,
-            mediaVulnerability: clamp(layer.player.mediaVulnerability + pack.mediaRiskModifier, 0, 1),
-            programLegibility: clamp(layer.player.programLegibility + pack.legibilityBonus, 0, 1),
-        },
-    };
-    return withFeedback(recalculateIssueLayer(nextLayer, flexibility), pack.name, 'Balicek zvedl salienci souvisejicich temat a snizil chaos agendy, pokud temata drzi pohromade.');
-}
 function answerProgramMediaQuestion(layer, questionId, answerId, flexibility) {
     const question = layer.mediaQuestions.find((item) => item.id === questionId);
     const answer = question?.answerOptions.find((item) => item.id === answerId);
-    if (!question || !answer) {
+    const resolvedIds = layer.resolvedMediaQuestionIds ?? [];
+    if (!question || !answer || questionId !== layer.pendingMediaQuestionId || resolvedIds.includes(questionId)) {
         return layer;
     }
     const nextLayer = applyMediaAnswer(layer, question.issueId, answer);
-    return withFeedback(recalculateIssueLayer({ ...nextLayer, pendingMediaQuestionId: nextPendingId(layer.mediaQuestions, questionId) }, flexibility), question.title, answer.description);
+    return withFeedback(recalculateIssueLayer({
+        ...nextLayer,
+        pendingMediaQuestionId: nextPendingId(layer.mediaQuestions, questionId, [...resolvedIds, questionId]),
+        resolvedMediaQuestionIds: [...resolvedIds, questionId],
+    }, flexibility), question.title, answer.description);
 }
 function answerCampaignTrip(layer, tripId, optionId, flexibility) {
     const trip = layer.tripEvents.find((item) => item.id === tripId);
     const option = trip?.options.find((item) => item.id === optionId);
-    if (!trip || !option) {
+    const resolvedIds = layer.resolvedCampaignTripIds ?? [];
+    if (!trip || !option || tripId !== layer.pendingCampaignTripId || resolvedIds.includes(tripId)) {
         return layer;
     }
     const nextLayer = applyTripOption(layer, option);
-    return withFeedback(recalculateIssueLayer({ ...nextLayer, pendingCampaignTripId: nextPendingId(layer.tripEvents, tripId) }, flexibility), trip.title, option.description);
+    return withFeedback(recalculateIssueLayer({
+        ...nextLayer,
+        pendingCampaignTripId: nextPendingId(layer.tripEvents, tripId, [...resolvedIds, tripId]),
+        resolvedCampaignTripIds: [...resolvedIds, tripId],
+    }, flexibility), trip.title, option.description);
 }
 function answerDebateAttack(layer, responseId, flexibility) {
     const attack = layer.debateAttack;
     const response = attack?.responseOptions.find((item) => item.id === responseId);
-    if (!attack || !response) {
+    const resolvedIds = layer.resolvedDebateAttackIds ?? [];
+    if (!attack || !response || resolvedIds.includes(attack.id)) {
         return layer;
     }
     const nextLayer = applyDebateResponse(layer, response, attack.relatedIssues);
-    return withFeedback(recalculateIssueLayer({ ...nextLayer, debateAttack: undefined }, flexibility), attack.title, response.description);
+    return withFeedback(recalculateIssueLayer({ ...nextLayer, debateAttack: undefined, resolvedDebateAttackIds: [...resolvedIds, attack.id] }, flexibility), attack.title, response.description);
 }
 function generateDebateAttack(party, coherenceBreakdown, relations, issues = []) {
     if (coherenceBreakdown.totalIncoherence < 0.35) {
@@ -434,8 +492,8 @@ function calculateProgramMetrics(party, issues, framings, coherence) {
         return sum + (issue?.controversy ?? 0.4) * position.salience * Math.abs(position.position / 2);
     }, 0);
     return {
-        coreLoyalty: clamp(0.42 + coherence.coherenceScore / 250 + party.activeCampaignPackages.length * 0.03, 0, 1),
-        factionTension: clamp(0.15 + coherence.originPenalty * 0.8 + coherence.rulePenalty * 0.22, 0, 1),
+        coreLoyalty: clamp(0.42 + coherence.coherenceScore / 250, 0, 1),
+        factionTension: clamp(0.15 + coherence.originPenalty * 0.8 + (coherence.rulePenalty + coherence.unresolvedTensionPenalty) * 0.2, 0, 1),
         mediaVulnerability: clamp(0.18 + coherence.totalIncoherence * 0.12 + controversialSalience / 80, 0, 1),
         programLegibility: clamp(0.35 + issueLegibility * 0.35 + framingLegibility - coherence.agendaPenalty * 0.16, 0, 1),
         swingAppeal: clamp(0.34 + coherence.coherenceScore / 300 - coherence.rulePenalty * 0.08 - controversialSalience / 100, 0, 1),
@@ -453,10 +511,53 @@ function calculateResidualPenalty(partyIssues, issues) {
     const salienceTotal = active.reduce((sum, position) => sum + position.salience, 0);
     return salienceTotal > 0 ? weightedExtremity / salienceTotal : 0;
 }
-function calculateAudiencePenalty(partyIssues, relations) {
-    return relations
-        .filter((relation) => relation.type === 'splits_audience')
-        .reduce((sum, relation) => sum + implicationViolation(partyIssues, relation) * 0.7, 0);
+function relationAlignment(position, expectedDirection) {
+    const expected = directionValue(expectedDirection);
+    if (expected === 0) {
+        return Math.abs(position.position) / 2;
+    }
+    return clamp((position.position * expected) / 2, 0, 1);
+}
+function relationContradiction(position, expectedDirection) {
+    const expected = directionValue(expectedDirection);
+    if (expected === 0) {
+        return 0;
+    }
+    return clamp((-position.position * expected) / 2, 0, 1);
+}
+function hasUsefulFraming(relation, partyIssues, framings) {
+    if (relation.type !== 'requires_framing' && relation.type !== 'tension') {
+        return false;
+    }
+    const selectedFramings = [partyIssues[relation.from]?.framingId, partyIssues[relation.to]?.framingId]
+        .map((framingId) => framings.find((framing) => framing.id === framingId))
+        .filter((framing) => framing?.issueId === relation.from || framing?.issueId === relation.to)
+        .filter(Boolean);
+    return selectedFramings.some((framing) => {
+        if (framing.resolvesRelations?.includes(relationKey(relation))) {
+            return true;
+        }
+        return Boolean(framing.resolvesRelationTypes?.includes(relation.type) &&
+            (framing.legibilityModifier >= 0.08 ||
+                framing.controversyModifier <= -0.08 ||
+                framing.swingAppealModifier >= 0.06 ||
+                Object.values(framing.dimensionEffects ?? {}).some((value) => Math.abs(value) >= 0.05)));
+    });
+}
+function relationKey(relation) {
+    return `${relation.from}->${relation.to}`;
+}
+function addRelationNote(notes, relation, score, label) {
+    if (Math.abs(score) < 0.025) {
+        return;
+    }
+    notes.push({
+        description: `${label}: ${relation.description}`,
+        from: relation.from,
+        score,
+        to: relation.to,
+        type: relation.type,
+    });
 }
 function inferVoterIssuePreference(segment, issue) {
     const space = segment.space;
@@ -550,12 +651,12 @@ function withFeedback(layer, title, message) {
         feedbackLog: [feedback, ...layer.feedbackLog].slice(0, 8),
     };
 }
-function nextPendingId(items, currentId) {
+function nextPendingId(items, currentId, resolvedIds) {
     const index = items.findIndex((item) => item.id === currentId);
     if (index < 0 || items.length === 0) {
         return undefined;
     }
-    return items[(index + 1) % items.length]?.id;
+    return items.slice(index + 1).find((item) => !resolvedIds.includes(item.id))?.id;
 }
 function issueName(issues, issueId) {
     return issues.find((issue) => issue.id === issueId)?.shortName ?? issueId;

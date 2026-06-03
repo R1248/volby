@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.tripEvents = exports.mediaQuestions = exports.campaignPackages = exports.ideologicalFrames = exports.issueRelations = exports.issueFramings = exports.programIssues = void 0;
+exports.tripEvents = exports.mediaQuestions = exports.ideologicalFrames = exports.issueRelations = exports.issueFramings = exports.programIssues = void 0;
 exports.createIssueLayerState = createIssueLayerState;
 exports.createDefaultIssuePositions = createDefaultIssuePositions;
 exports.emptyCoherence = emptyCoherence;
@@ -48,12 +48,12 @@ exports.issueFramings = [
     { id: 'noCultureWar', issueId: 'sameSexMarriage', name: 'Bez kulturni valky', description: 'Umirnene pravni reseni bez ostrych symbolu.', legibilityModifier: 0.06, controversyModifier: -0.12, baseMobilizationModifier: -0.02, swingAppealModifier: 0.08 },
     { id: 'traditionalFamily', issueId: 'sameSexMarriage', name: 'Tradicni rodina', description: 'Tema je zasazene do ochrany tradicni definice.', legibilityModifier: 0.08, controversyModifier: 0.08, baseMobilizationModifier: 0.05, swingAppealModifier: -0.06, dimensionEffects: { culture: 0.1 } },
     { id: 'climateResponsibility', issueId: 'greenDeal', name: 'Klimaticka odpovednost', description: 'Green Deal jako nutna klimaticka transformace a odpovednost vuci budoucnosti.', legibilityModifier: 0.08, controversyModifier: 0.12, baseMobilizationModifier: 0.06, swingAppealModifier: 0.0, dimensionEffects: { green: 0.08, globalism: 0.04 } },
-    { id: 'modernization', issueId: 'greenDeal', name: 'Modernizace ekonomiky', description: 'Green Deal jako prilezitost pro inovace, energetickou bezpecnost a nove technologie.', legibilityModifier: 0.12, controversyModifier: -0.1, baseMobilizationModifier: 0.02, swingAppealModifier: 0.08, dimensionEffects: { econ: 0.06, green: 0.04 } },
-    { id: 'energySecurity', issueId: 'greenDeal', name: 'Energeticka bezpecnost', description: 'Transformace jako snizeni zavislosti na fosilnich palivech a geopoliticky rizikovych dodavatelich.', legibilityModifier: 0.08, controversyModifier: -0.08, baseMobilizationModifier: 0.04, swingAppealModifier: 0.06, dimensionEffects: { authority: 0.04, ukraine: 0.05 } },
+    { id: 'modernization', issueId: 'greenDeal', name: 'Modernizace ekonomiky', description: 'Green Deal jako prilezitost pro inovace, energetickou bezpecnost a nove technologie.', legibilityModifier: 0.12, controversyModifier: -0.1, baseMobilizationModifier: 0.02, swingAppealModifier: 0.08, dimensionEffects: { econ: 0.06, green: 0.04 }, resolvesRelations: ['greenDeal->nuclearEnergy', 'greenDeal->regulation', 'energyPrices->greenDeal'], resolvesRelationTypes: ['requires_framing', 'tension'] },
+    { id: 'energySecurity', issueId: 'greenDeal', name: 'Energeticka bezpecnost', description: 'Transformace jako snizeni zavislosti na fosilnich palivech a geopoliticky rizikovych dodavatelich.', legibilityModifier: 0.08, controversyModifier: -0.08, baseMobilizationModifier: 0.04, swingAppealModifier: 0.06, dimensionEffects: { authority: 0.04, ukraine: 0.05 }, resolvesRelations: ['greenDeal->nuclearEnergy', 'energyPrices->greenDeal', 'greenDeal->nationalSovereignty'], resolvesRelationTypes: ['requires_framing', 'tension'] },
     { id: 'expensiveBureaucracy', issueId: 'greenDeal', name: 'Draha byrokracie z Bruselu', description: 'Green Deal jako preregulovany, drahy a socialne necitlivy evropsky projekt.', legibilityModifier: 0.06, controversyModifier: 0.1, baseMobilizationModifier: 0.08, swingAppealModifier: -0.05, dimensionEffects: { globalism: -0.08, establishment: -0.05 } },
     { id: 'industrialThreat', issueId: 'greenDeal', name: 'Hrozba pro prumysl a domacnosti', description: 'Green Deal jako riziko pro ceny energii, prumysl, automobilky a domacnosti.', legibilityModifier: 0.06, controversyModifier: 0.14, baseMobilizationModifier: 0.08, swingAppealModifier: -0.08, dimensionEffects: { econ: -0.05, authority: 0.04 } },
-    { id: 'reformNotReject', issueId: 'greenDeal', name: 'Reformovat, ne odmitnout', description: 'Ekologicka modernizace ano, ale soucasny Green Deal je potreba upravit kvuli cenam, prumyslu a socialnim dopadum.', legibilityModifier: 0.04, controversyModifier: -0.12, baseMobilizationModifier: -0.01, swingAppealModifier: 0.1 },
-    { id: 'westernSecurity', issueId: 'ukraineSupport', name: 'Zapadni bezpecnost', description: 'Podpora Ukrajiny jako ochrana Ceska.', legibilityModifier: 0.1, controversyModifier: -0.04, baseMobilizationModifier: 0.04, swingAppealModifier: 0.04, dimensionEffects: { ukraine: 0.08 } },
+    { id: 'reformNotReject', issueId: 'greenDeal', name: 'Reformovat, ne odmitnout', description: 'Ekologicka modernizace ano, ale soucasny Green Deal je potreba upravit kvuli cenam, prumyslu a socialnim dopadum.', legibilityModifier: 0.04, controversyModifier: -0.12, baseMobilizationModifier: -0.01, swingAppealModifier: 0.1, resolvesRelations: ['greenDeal->regulation', 'greenDeal->taxes', 'energyPrices->greenDeal'], resolvesRelationTypes: ['tension'] },
+    { id: 'westernSecurity', issueId: 'ukraineSupport', name: 'Zapadni bezpecnost', description: 'Podpora Ukrajiny jako ochrana Ceska.', legibilityModifier: 0.1, controversyModifier: -0.04, baseMobilizationModifier: 0.04, swingAppealModifier: 0.04, dimensionEffects: { ukraine: 0.08 }, resolvesRelations: ['ukraineSupport->nationalSovereignty'], resolvesRelationTypes: ['tension'] },
     { id: 'costControl', issueId: 'ukraineSupport', name: 'Kontrola nakladu', description: 'Podpora s durazem na transparentni naklady.', legibilityModifier: 0.04, controversyModifier: -0.1, baseMobilizationModifier: -0.02, swingAppealModifier: 0.08 },
     { id: 'cheapEnergy', issueId: 'energyPrices', name: 'Levna energie', description: 'Doporuceni prioritizuje ceny pro domacnosti a firmy.', legibilityModifier: 0.1, controversyModifier: 0.02, baseMobilizationModifier: 0.06, swingAppealModifier: 0.04, dimensionEffects: { econ: -0.04 } },
     { id: 'cleanState', issueId: 'antiCorruption', name: 'Cisty stat', description: 'Drazsi duslednost v pravidlech a zakazkach.', legibilityModifier: 0.12, controversyModifier: -0.04, baseMobilizationModifier: 0.04, swingAppealModifier: 0.04 },
@@ -122,13 +122,6 @@ exports.ideologicalFrames = [
     { id: 'nationalConservative', name: 'Narodne konzervativni smer', description: 'Suverenita, poradek a opatrnost k integraci.', expectedIssues: { nationalSovereignty: 1, migration: 1, lawAndOrder: 1, directDemocracy: 1 }, tolerance: { taxes: 1, pensions: 1 }, dimensionCenter: { culture: 0.55, authority: 0.55, globalism: -0.65 } },
     { id: 'greenProgressive', name: 'Zeleny progresivismus', description: 'Klima, prava a evropska modernizace.', expectedIssues: { greenDeal: 1, coalPhaseout: 1, sameSexMarriage: 1, euIntegration: 1 }, tolerance: { nuclearEnergy: 1, taxes: 1 }, dimensionCenter: { culture: -0.55, green: 0.7, globalism: 0.5 } },
     { id: 'antiBureaucraticProtest', name: 'Proti byrokracii', description: 'Nizke regulace, kritika elit a levne energie.', expectedIssues: { regulation: -1, taxes: -1, greenDeal: -1, energyPrices: 1, directDemocracy: 1 }, tolerance: { nationalSovereignty: 1, lawAndOrder: 1 }, dimensionCenter: { econ: 0.35, establishment: -0.45, globalism: -0.45 } },
-];
-exports.campaignPackages = [
-    { id: 'freedomWithoutBureaucracy', name: 'Svoboda bez byrokracie', description: 'Dane, regulace, statni sprava a protikorupcni pravidla.', issueIds: ['taxes', 'regulation', 'civilServiceReform', 'antiCorruption'], slogan: 'Mene papiru, vice duvery.', legibilityBonus: 0.12, mobilizationBonus: 0.05, mediaRiskModifier: 0.03 },
-    { id: 'secureAffordableEnergy', name: 'Bezpecna a dostupna energie', description: 'Ceny energii, jadro a realisticky prechod.', issueIds: ['energyPrices', 'nuclearEnergy', 'greenDeal', 'coalPhaseout'], slogan: 'Energie, kterou si zeme muze dovolit.', legibilityBonus: 0.1, mobilizationBonus: 0.06, mediaRiskModifier: 0.08 },
-    { id: 'modernLiberalState', name: 'Moderni liberalni stat', description: 'Prava, konopi, profesionalni stat a Evropa.', issueIds: ['sameSexMarriage', 'cannabis', 'civilServiceReform', 'euIntegration'], legibilityBonus: 0.12, mobilizationBonus: 0.05, mediaRiskModifier: 0.05 },
-    { id: 'sovereignSafeCountry', name: 'Suverenni a bezpecna zeme', description: 'Migrace, poradek, suverenita a prima demokracie.', issueIds: ['migration', 'lawAndOrder', 'nationalSovereignty', 'directDemocracy'], legibilityBonus: 0.1, mobilizationBonus: 0.08, mediaRiskModifier: 0.06 },
-    { id: 'fairLivingStandards', name: 'Jiste zivobyti', description: 'Duchody, bydleni, energie a prerozdelovani.', issueIds: ['pensions', 'housing', 'energyPrices', 'redistribution'], legibilityBonus: 0.1, mobilizationBonus: 0.06, mediaRiskModifier: 0.04 },
 ];
 exports.mediaQuestions = [
     {
@@ -270,18 +263,18 @@ exports.tripEvents = [
 function createIssueLayerState() {
     const originalIssuePositions = createDefaultIssuePositions();
     const player = {
-        activeCampaignPackages: [],
         coherenceBreakdown: emptyCoherence(),
         coreLoyalty: 0.5,
         currentIssuePositions: clonePositions(originalIssuePositions),
         factionTension: 0.2,
+        maxProgramChangesPerWeek: 3,
         mediaVulnerability: 0.25,
         originalIssuePositions,
+        programChangesThisWeek: 0,
         programLegibility: 0.5,
         swingAppeal: 0.5,
     };
     return {
-        campaignPackages: exports.campaignPackages,
         debateAttack: undefined,
         feedbackLog: [],
         framings: exports.issueFramings,
@@ -292,6 +285,9 @@ function createIssueLayerState() {
         pendingMediaQuestionId: exports.mediaQuestions[0]?.id,
         player,
         relations: exports.issueRelations,
+        resolvedCampaignTripIds: [],
+        resolvedDebateAttackIds: [],
+        resolvedMediaQuestionIds: [],
         tripEvents: exports.tripEvents,
     };
 }
@@ -324,12 +320,18 @@ function emptyCoherence() {
     return {
         agendaPenalty: 0,
         audiencePenalty: 0,
+        clusterCoherenceBonus: 0,
         coherenceScore: 100,
+        contradictionPenalty: 0,
         framePenalty: 0,
+        mobilizationOverlapBonus: 0,
         originPenalty: 0,
         residualPenalty: 0,
+        relationNotes: [],
         rulePenalty: 0,
+        sameFamilyBonus: 0,
         totalIncoherence: 0,
+        unresolvedTensionPenalty: 0,
     };
 }
 function clonePositions(positions) {

@@ -41,7 +41,11 @@ export type PartyId =
   | 'kdu'
   | 'spd'
   | 'motorists'
-  | 'top09';
+  | 'top09'
+  | 'stacilo'
+  | 'prisaha'
+  | 'generace'
+  | 'others';
 
 export type SegmentId = string;
 
@@ -145,6 +149,7 @@ export type PartySeed = {
   issuePositions: Partial<Record<IssueId, number>>;
   leaderName: string;
   leaderTraits: LeaderTraits;
+  mandateEligible?: boolean;
   name: string;
   officeRole: OfficeRole;
   organizationBase: Partial<Record<RegionId, number>>;
