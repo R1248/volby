@@ -18,6 +18,7 @@ import type {
 const compactData = voterFieldData as unknown as CompactVoterFieldData;
 const clusteredRegionalCompactData = clusteredRegionalVoterFieldData as unknown as CompactRegionalVoterFieldData;
 const regionalCompactData = regionalVoterFieldData as unknown as CompactRegionalVoterFieldData;
+let calibratedV04CompactData: CompactRegionalVoterFieldData | undefined;
 
 export function loadVoterFieldV03(): VoterFieldBundle {
   return decodeCompactVoterField(compactData);
@@ -29,6 +30,19 @@ export function loadRegionalizedVoterFieldV03(): VoterFieldBundle {
 
 export function loadClusteredRegionalizedVoterFieldV03(): VoterFieldBundle {
   return decodeRegionalizedVoterField(clusteredRegionalCompactData);
+}
+
+export function loadClusteredRegionalizedVoterFieldV04(): VoterFieldBundle {
+  if (!calibratedV04CompactData) {
+    // Lazy require keeps TypeScript checks green before the offline materialization script creates this JSON.
+    calibratedV04CompactData = require('./voterField.calibrated.v04.json') as CompactRegionalVoterFieldData;
+  }
+
+  return decodeRegionalizedVoterField(calibratedV04CompactData);
+}
+
+export function loadClusteredRegionalizedVoterField(version: 'v03' | 'v04'): VoterFieldBundle {
+  return version === 'v04' ? loadClusteredRegionalizedVoterFieldV04() : loadClusteredRegionalizedVoterFieldV03();
 }
 
 export function decodeCompactVoterField(data: CompactVoterFieldData): VoterFieldBundle {

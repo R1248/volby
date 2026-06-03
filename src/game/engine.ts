@@ -3,7 +3,12 @@ import type { RegionId } from '../types/region';
 import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/regionalAggregation';
 import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
-import { calibratePartyAmplitudesToTargets, type BaselineSupportOptions } from './baselineCalibration';
+import {
+  applyPrecalibratedBaselineV04,
+  calibratePartyAmplitudesToTargets,
+  partyRegionalPriorUtilityModifier,
+  type BaselineSupportOptions,
+} from './baselineCalibration';
 import { regionalBaselineBiasUtilityModifier } from './calibration/regionalBaselineBias';
 import { createIssueLayerState } from './issueSeed';
 import { generateWeeklyMediaInvitations, mediaSentimentFromResult, resolveMediaAppearance } from './mediaEngine';
@@ -57,9 +62,17 @@ export function initializeComputedState(state: GameState): GameState {
   let nextState = cloneState(state);
   ensureIssueLayer(nextState);
   nextState.issueLayer = recalculateIssueLayer(nextState.issueLayer, nextState.partyRuntime.player.field.flexibility);
-  const initialBaselineOptions = nextState.baselineCalibrated === false ? { disableProgramModifier: true } : undefined;
+  const baselineMode = nextState.baselineMode ?? 'legacy-fit-national';
+  const initialBaselineOptions =
+    baselineMode === 'precalibrated-v04' || nextState.baselineCalibrated === false
+      ? { disableProgramModifier: true }
+      : undefined;
 
-  if (nextState.baselineCalibrated === false) {
+  if (baselineMode === 'precalibrated-v04') {
+    nextState = applyPrecalibratedBaselineV04(nextState);
+  }
+
+  if (baselineMode === 'legacy-fit-national' && nextState.baselineCalibrated === false) {
     nextState = calibratePartyAmplitudesToTargets(nextState, baselineTargetShares, {
       disablePlayerProgramModifier: true,
       supportResolver: resolveSupportForCalibration,
@@ -208,7 +221,7 @@ export function computeNationalSupport(
   regionalSupport: GameState['regionalSupport'] = state.regionalSupport,
 ): Record<PartyId, number> {
   const weighted = Object.fromEntries(partyIds.map((partyId) => [partyId, 0])) as Record<PartyId, number>;
-  const regionalWeights = getRegionalVoterWeightByRegionId();
+  const regionalWeights = getRegionalVoterWeightByRegionId(state.baselineMode);
   const totalPopulation = state.regions.reduce((sum, region) => sum + (regionalWeights[region.id] ?? region.populationWeight), 0);
 
   for (const region of state.regions) {
@@ -853,9 +866,11 @@ type SupportPrecision = 'full' | 'weekly';
 
 let cachedFullRegionalVoterPoints: VoterPoint[] | undefined;
 let cachedWeeklyRegionalVoterPoints: VoterPoint[] | undefined;
+let cachedPrecalibratedV04RegionalVoterPoints: VoterPoint[] | undefined;
 let cachedCompactFullRegionalVoterPoints: CompactRegionalVoterPoint[] | undefined;
 let cachedCompactWeeklyRegionalVoterPoints: CompactRegionalVoterPoint[] | undefined;
-let cachedRegionalWeights: Record<string, number> | undefined;
+let cachedCompactPrecalibratedV04RegionalVoterPoints: CompactRegionalVoterPoint[] | undefined;
+const cachedRegionalWeightsByMode: Partial<Record<NonNullable<GameState['baselineMode']>, Record<string, number>>> = {};
 
 type CompactRegionalVoterPoint = {
   ageGroup?: string;
@@ -879,7 +894,19 @@ type PartyUtilityContext = {
   runtime: GameState['partyRuntime'][PartyId];
 };
 
-function getRegionalVoterPoints(precision: SupportPrecision = 'weekly') {
+function getRegionalVoterPoints(
+  precision: SupportPrecision = 'weekly',
+  baselineMode: GameState['baselineMode'] = 'legacy-fit-national',
+) {
+  if (baselineMode === 'precalibrated-v04') {
+    if (!cachedPrecalibratedV04RegionalVoterPoints) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { loadClusteredRegionalizedVoterFieldV04 } = require('../simulation/model/voterFieldLoader') as typeof import('../simulation/model/voterFieldLoader');
+      cachedPrecalibratedV04RegionalVoterPoints = loadClusteredRegionalizedVoterFieldV04().points;
+    }
+    return cachedPrecalibratedV04RegionalVoterPoints;
+  }
+
   if (precision === 'full') {
     if (!cachedFullRegionalVoterPoints) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -898,17 +925,27 @@ function getRegionalVoterPoints(precision: SupportPrecision = 'weekly') {
   return cachedWeeklyRegionalVoterPoints;
 }
 
-function getRegionalVoterWeightByRegionId() {
-  if (!cachedRegionalWeights) {
-    cachedRegionalWeights = aggregateRegionalWeightByGameRegion(getRegionalVoterPoints('weekly'));
+function getRegionalVoterWeightByRegionId(baselineMode: GameState['baselineMode'] = 'legacy-fit-national') {
+  const mode = baselineMode ?? 'legacy-fit-national';
+  if (!cachedRegionalWeightsByMode[mode]) {
+    cachedRegionalWeightsByMode[mode] = aggregateRegionalWeightByGameRegion(getRegionalVoterPoints('weekly', mode));
   }
-  return cachedRegionalWeights;
+  return cachedRegionalWeightsByMode[mode]!;
 }
 
-function getCompactRegionalVoterPoints(precision: SupportPrecision) {
-  const cached = precision === 'full' ? cachedCompactFullRegionalVoterPoints : cachedCompactWeeklyRegionalVoterPoints;
+function getCompactRegionalVoterPoints(
+  precision: SupportPrecision,
+  baselineMode: GameState['baselineMode'] = 'legacy-fit-national',
+) {
+  const mode = baselineMode ?? 'legacy-fit-national';
+  const cached =
+    mode === 'precalibrated-v04'
+      ? cachedCompactPrecalibratedV04RegionalVoterPoints
+      : precision === 'full'
+        ? cachedCompactFullRegionalVoterPoints
+        : cachedCompactWeeklyRegionalVoterPoints;
   if (!cached) {
-    const compactPoints = getRegionalVoterPoints(precision).reduce<CompactRegionalVoterPoint[]>((points, point) => {
+    const compactPoints = getRegionalVoterPoints(precision, mode).reduce<CompactRegionalVoterPoint[]>((points, point) => {
       const regionId = regionIdFromKraj(point.geography?.krajId);
       if (!regionId) {
         return points;
@@ -933,11 +970,17 @@ function getCompactRegionalVoterPoints(precision: SupportPrecision) {
       return points;
     }, []);
 
-    if (precision === 'full') {
+    if (mode === 'precalibrated-v04') {
+      cachedCompactPrecalibratedV04RegionalVoterPoints = compactPoints;
+    } else if (precision === 'full') {
       cachedCompactFullRegionalVoterPoints = compactPoints;
     } else {
       cachedCompactWeeklyRegionalVoterPoints = compactPoints;
     }
+  }
+
+  if (mode === 'precalibrated-v04') {
+    return cachedCompactPrecalibratedV04RegionalVoterPoints!;
   }
 
   return precision === 'full' ? cachedCompactFullRegionalVoterPoints! : cachedCompactWeeklyRegionalVoterPoints!;
@@ -948,7 +991,7 @@ function computeRegionalSupportFromParticles(
   precision: SupportPrecision,
   options: SupportComputationOptions = {},
 ): GameState['regionalSupport'] {
-  const compactPoints = getCompactRegionalVoterPoints(precision);
+  const compactPoints = getCompactRegionalVoterPoints(precision, state.baselineMode);
   const regionsById = Object.fromEntries(state.regions.map((region) => [region.id, region])) as Record<RegionId, RegionSeed>;
   const partyContexts = partyIds
     .map((partyId) => {
@@ -1025,6 +1068,12 @@ function computeParticleUtilityForContext(
     options.regionalBaselineBias,
     options.regionalBaselineBiasStrength ?? 0,
   );
+  const partyRegionalPriorModifier = partyRegionalPriorUtilityModifier(
+    partyId,
+    region.id,
+    options.partyRegionalPrior ?? state.partyRegionalPrior,
+    options.partyRegionalPriorStrength ?? state.partyRegionalPriorStrength ?? 0,
+  );
   const scandalPenalty = state.scandals
     .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
     .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -1037,7 +1086,8 @@ function computeParticleUtilityForContext(
     fatiguePenalty -
     scandalPenalty +
     mediaClusterModifier +
-    regionalBaselineBiasModifier;
+    regionalBaselineBiasModifier +
+    partyRegionalPriorModifier;
 
   return Math.max(0.001, Math.exp(logUtility));
 }

@@ -177,7 +177,7 @@ export type CompactRegionalVoterFieldData = {
   points: number[][];
   source: string;
   sourceFile: string;
-  version: '0.3-regionalized' | '0.3-regionalized-clustered';
+  version: '0.3-regionalized' | '0.3-regionalized-clustered' | '0.4-calibrated';
 };
 
 export type VoterFieldBundle = {

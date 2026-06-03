@@ -1,8 +1,13 @@
-import type { GameState, PartyId } from './types';
+import baselineCalibrationV04 from './calibration/baselineCalibration.v04.json';
+import type { BaselineCalibrationArtifact, PartyRegionalPriorMap } from './calibration/baselineCalibrationTypes';
 import type { RegionalBaselineBias } from './calibration/regionalBaselineBias';
+import type { GameState, PartyId } from './types';
+import type { RegionId } from '../types/region';
 
 export type BaselineSupportOptions = {
   disableProgramModifier?: boolean;
+  partyRegionalPrior?: PartyRegionalPriorMap;
+  partyRegionalPriorStrength?: number;
   regionalBaselineBias?: RegionalBaselineBias;
   regionalBaselineBiasStrength?: number;
 };
@@ -67,6 +72,52 @@ export function calibratePartyAmplitudesToTargets(
   }
 
   return nextState;
+}
+
+export function getBaselineCalibrationV04(): BaselineCalibrationArtifact {
+  return baselineCalibrationV04 as BaselineCalibrationArtifact;
+}
+
+export function applyPrecalibratedBaselineV04(state: GameState): GameState {
+  return applyBaselineCalibrationArtifact(state, getBaselineCalibrationV04(), {
+    partyRegionalPriorStrength: 1,
+  });
+}
+
+export function applyBaselineCalibrationArtifact(
+  state: GameState,
+  artifact: BaselineCalibrationArtifact,
+  options: { partyRegionalPriorStrength?: number } = {},
+): GameState {
+  const nextState = cloneState(state);
+
+  for (const [partyId, amplitude] of Object.entries(artifact.final.partyAmplitude) as [PartyId, number][]) {
+    const runtime = nextState.partyRuntime[partyId];
+    if (!runtime || !Number.isFinite(amplitude) || amplitude <= 0) {
+      continue;
+    }
+    runtime.field.amplitude = amplitude;
+  }
+
+  nextState.baselineCalibrated = true;
+  nextState.baselineMode = 'precalibrated-v04';
+  nextState.partyRegionalPrior = artifact.final.partyRegionalPrior;
+  nextState.partyRegionalPriorStrength = options.partyRegionalPriorStrength ?? 0;
+
+  return nextState;
+}
+
+export function partyRegionalPriorUtilityModifier(
+  partyId: PartyId,
+  regionId: RegionId,
+  prior: PartyRegionalPriorMap | undefined,
+  strength = 0,
+) {
+  if (!prior || strength <= 0) {
+    return 0;
+  }
+
+  return (prior[partyId]?.[regionId] ?? 0) * strength;
 }
 
 function normalizeTargets(targets: Partial<Record<PartyId, number>>) {

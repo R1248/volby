@@ -2151,6 +2151,7 @@ export function createInitialGameState(): GameState {
 
   const initialState: GameState = {
     baselineCalibrated: false,
+    baselineMode: "legacy-fit-national",
     campaignActionsV2,
     coalitionRelations,
     events,

@@ -36,6 +36,7 @@ expo-start*.log
 
 # typescript
 *.tsbuildinfo
+.tmp-*/
 
 app-example
 

@@ -1,5 +1,6 @@
 import type { RegionId } from '../types/region';
 import type { ActionAvailability, ActionPlacement } from './actions/actionTypes';
+import type { PartyRegionalPriorMap } from './calibration/baselineCalibrationTypes';
 import type { IssueLayerState, ProgramIssueId } from './issueTypes';
 
 export type Vec3 = {
@@ -50,6 +51,7 @@ export type PartyId =
 export type SegmentId = string;
 
 export type GameMode = 'fullRealism';
+export type BaselineMode = 'legacy-fit-national' | 'precalibrated-v04';
 export type MarketingAdvisorId = 'none' | 'junior' | 'senior' | 'elite';
 export type OfficeRole = 'government' | 'opposition' | 'outsider';
 
@@ -696,6 +698,7 @@ export type TurnBriefing = {
 
 export type GameState = {
   baselineCalibrated?: boolean;
+  baselineMode?: BaselineMode;
   campaignActionsV2: CampaignActionV2[];
   coalitionRelations: CoalitionRelation[];
   events: EventCard[];
@@ -711,6 +714,8 @@ export type GameState = {
   mode: GameMode;
   nationalSupport: Record<PartyId, number>;
   parties: PartySeed[];
+  partyRegionalPrior?: PartyRegionalPriorMap;
+  partyRegionalPriorStrength?: number;
   partyRuntime: Record<PartyId, PartyRuntime>;
   playerPartyId: PartyId;
   polls: Record<PartyId, PollEstimate>;
