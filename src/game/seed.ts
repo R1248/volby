@@ -7,6 +7,7 @@ import { nationalPartyVoteTargets2025 } from "./calibration/regionalVoteTargets2
 import { createIssueLayerState } from "./issueSeed";
 import { generateWeeklyMediaInvitations } from "./mediaEngine";
 import type {
+  BaselineMode,
   CoalitionRelation,
   EventCard,
   GameRules,
@@ -48,6 +49,8 @@ export const partyIds: PartyId[] = [
 // Raw 2025 vote shares, including below-threshold and micro-party votes.
 // SPOLU is split internally by its 2025 mandate ratio: ODS 27, KDU 16, TOP09 9.
 export const baselineTargetShares: Record<PartyId, number> = nationalPartyVoteTargets2025;
+
+export const DEFAULT_BASELINE_MODE: BaselineMode = "legacy-fit-national";
 
 const vec = (econ: number, culture: number, authority: number): Vec3 => ({
   authority,
@@ -2144,14 +2147,18 @@ const initialRuntime = (party: PartySeed): PartyRuntime => {
   };
 };
 
-export function createInitialGameState(): GameState {
+export type CreateInitialGameStateOptions = {
+  baselineMode?: BaselineMode;
+};
+
+export function createInitialGameState(options: CreateInitialGameStateOptions = {}): GameState {
   const partyRuntime = Object.fromEntries(
     parties.map((party) => [party.id, initialRuntime(party)]),
   ) as Record<PartyId, PartyRuntime>;
 
   const initialState: GameState = {
     baselineCalibrated: false,
-    baselineMode: "legacy-fit-national",
+    baselineMode: options.baselineMode ?? DEFAULT_BASELINE_MODE,
     campaignActionsV2,
     coalitionRelations,
     events,

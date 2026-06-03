@@ -29,11 +29,15 @@ type CalibrationOptions = {
   supportResolver?: SupportResolver;
 };
 
+let nationalAmplitudeCalibrationRunCount = 0;
+
 export function calibratePartyAmplitudesToTargets(
   state: GameState,
   targets: Partial<Record<PartyId, number>>,
   options: CalibrationOptions = {},
 ): GameState {
+  nationalAmplitudeCalibrationRunCount += 1;
+
   if (!options.supportResolver) {
     throw new Error('calibratePartyAmplitudesToTargets requires a supportResolver');
   }
@@ -72,6 +76,14 @@ export function calibratePartyAmplitudesToTargets(
   }
 
   return nextState;
+}
+
+export function getNationalAmplitudeCalibrationRunCount() {
+  return nationalAmplitudeCalibrationRunCount;
+}
+
+export function resetNationalAmplitudeCalibrationRunCount() {
+  nationalAmplitudeCalibrationRunCount = 0;
 }
 
 export function getBaselineCalibrationV04(): BaselineCalibrationArtifact {

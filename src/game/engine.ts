@@ -1,4 +1,4 @@
-import { baselineTargetShares, parties, partyIds } from './seed';
+import { DEFAULT_BASELINE_MODE, baselineTargetShares, parties, partyIds } from './seed';
 import type { RegionId } from '../types/region';
 import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/regionalAggregation';
 import type { VoterPoint } from '../simulation/model/types';
@@ -62,7 +62,7 @@ export function initializeComputedState(state: GameState): GameState {
   let nextState = cloneState(state);
   ensureIssueLayer(nextState);
   nextState.issueLayer = recalculateIssueLayer(nextState.issueLayer, nextState.partyRuntime.player.field.flexibility);
-  const baselineMode = nextState.baselineMode ?? 'legacy-fit-national';
+  const baselineMode = nextState.baselineMode ?? DEFAULT_BASELINE_MODE;
   const initialBaselineOptions =
     baselineMode === 'precalibrated-v04' || nextState.baselineCalibrated === false
       ? { disableProgramModifier: true }
@@ -896,7 +896,7 @@ type PartyUtilityContext = {
 
 function getRegionalVoterPoints(
   precision: SupportPrecision = 'weekly',
-  baselineMode: GameState['baselineMode'] = 'legacy-fit-national',
+  baselineMode: GameState['baselineMode'] = DEFAULT_BASELINE_MODE,
 ) {
   if (baselineMode === 'precalibrated-v04') {
     if (!cachedPrecalibratedV04RegionalVoterPoints) {
@@ -925,8 +925,8 @@ function getRegionalVoterPoints(
   return cachedWeeklyRegionalVoterPoints;
 }
 
-function getRegionalVoterWeightByRegionId(baselineMode: GameState['baselineMode'] = 'legacy-fit-national') {
-  const mode = baselineMode ?? 'legacy-fit-national';
+function getRegionalVoterWeightByRegionId(baselineMode: GameState['baselineMode'] = DEFAULT_BASELINE_MODE) {
+  const mode = baselineMode ?? DEFAULT_BASELINE_MODE;
   if (!cachedRegionalWeightsByMode[mode]) {
     cachedRegionalWeightsByMode[mode] = aggregateRegionalWeightByGameRegion(getRegionalVoterPoints('weekly', mode));
   }
@@ -935,9 +935,9 @@ function getRegionalVoterWeightByRegionId(baselineMode: GameState['baselineMode'
 
 function getCompactRegionalVoterPoints(
   precision: SupportPrecision,
-  baselineMode: GameState['baselineMode'] = 'legacy-fit-national',
+  baselineMode: GameState['baselineMode'] = DEFAULT_BASELINE_MODE,
 ) {
-  const mode = baselineMode ?? 'legacy-fit-national';
+  const mode = baselineMode ?? DEFAULT_BASELINE_MODE;
   const cached =
     mode === 'precalibrated-v04'
       ? cachedCompactPrecalibratedV04RegionalVoterPoints

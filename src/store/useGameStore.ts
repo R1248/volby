@@ -19,7 +19,7 @@ import {
 } from '@/src/game/engine';
 import { createIssueLayerState } from '@/src/game/issueSeed';
 import type { PartyIssuePosition, ProgramIssueId } from '@/src/game/issueTypes';
-import { createInitialGameState, marketingAdvisors } from '@/src/game/seed';
+import { DEFAULT_BASELINE_MODE, createInitialGameState, marketingAdvisors } from '@/src/game/seed';
 import { loadLatestGame, resetSave, saveGame, saveTurnSnapshot } from '@/src/game/storage';
 import type {
   GameState,
@@ -99,6 +99,7 @@ function asFullRealismState(state: GameState): GameState {
 
   return {
     ...state,
+    baselineMode: state.baselineMode ?? DEFAULT_BASELINE_MODE,
     campaignActionsV2,
     issueLayer: migrateIssueLayer(state.issueLayer ?? createIssueLayerState()),
     marketingAdvisors: state.marketingAdvisors ?? marketingAdvisors,
