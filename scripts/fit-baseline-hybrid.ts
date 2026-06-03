@@ -127,6 +127,7 @@ if (options.write) {
           },
           regionShift: report.finalParams.regionShift,
         },
+        contributionBreakdown: report.contributionBreakdown,
         comparison: report.comparison.map((scenario) => ({
           label: scenario.label,
           nationalGroupMaePct: scenario.nationalGroupMaePct,
@@ -183,6 +184,7 @@ function fitBaselineHybrid(cliOptions: CliOptions) {
   return {
     acceptance: createAcceptance(finalDiagnostics),
     comparison,
+    contributionBreakdown: createContributionBreakdown(comparison),
     finalDiagnostics,
     finalParams: params,
     finalSnapshot,
@@ -509,6 +511,9 @@ function createComparison(
   const nationalOnlyParams = calibrateNationalOnly(state, points, cliOptions);
   const regionOnlyParams = cloneParams(rawParams);
   regionOnlyParams.regionShift = clone(hybridParams.regionShift);
+  const fittedAmplitudeAndRegionShiftParams = cloneParams(hybridParams);
+  fittedAmplitudeAndRegionShiftParams.partyRegionalPrior =
+    emptyPartyRegionalPrior();
 
   return [
     evaluateScenario("A raw seed + raw field", state, points, rawParams),
@@ -518,9 +523,53 @@ function createComparison(
       points,
       nationalOnlyParams,
     ),
-    evaluateScenario("C region shifts only", state, points, regionOnlyParams),
+    evaluateScenario(
+      "C region shifts only with raw amplitudes",
+      state,
+      points,
+      regionOnlyParams,
+    ),
+    evaluateScenario(
+      "E fitted amplitudes + fitted region shifts only",
+      state,
+      points,
+      fittedAmplitudeAndRegionShiftParams,
+    ),
     evaluateScenario("D hybrid fit", state, points, hybridParams),
   ];
+}
+
+function createContributionBreakdown(scenarios: ScenarioResult[]) {
+  return {
+    nationalOnly: scenarioSummary(
+      requireScenario(scenarios, "B national-only calibrated"),
+    ),
+    fittedAmplitudeAndRegionShift: scenarioSummary(
+      requireScenario(
+        scenarios,
+        "E fitted amplitudes + fitted region shifts only",
+      ),
+    ),
+    hybrid: scenarioSummary(requireScenario(scenarios, "D hybrid fit")),
+  };
+}
+
+function scenarioSummary(scenario: ScenarioResult) {
+  return {
+    label: scenario.label,
+    nationalGroupMaePct: scenario.nationalGroupMaePct,
+    nationalGroupMaxErrorPct: scenario.nationalGroupMaxErrorPct,
+    regionalMaePct: scenario.regionalSanity.maePct,
+    regionalMaxErrorPct: scenario.regionalSanity.maxErrorPct,
+  };
+}
+
+function requireScenario(scenarios: ScenarioResult[], label: string) {
+  const scenario = scenarios.find((item) => item.label === label);
+  if (!scenario) {
+    throw new Error(`Missing scenario ${label}`);
+  }
+  return scenario;
 }
 
 function calibrateNationalOnly(

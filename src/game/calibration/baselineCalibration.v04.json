@@ -1,0 +1,752 @@
+{
+  "generatedAt": "2026-06-03T17:43:09.466Z",
+  "note": "Offline hybrid baseline fit. Runtime gameplay does not load this artifact unless explicitly wired later.",
+  "options": {
+    "ampLR": 0.65,
+    "clampLogAmplitudeMax": 2.4849066497880004,
+    "clampLogAmplitudeMin": -4.605170185988091,
+    "clampPrior": 0.35,
+    "clampShift": 0.18,
+    "iterations": 40,
+    "outputPath": "src/game/calibration/baselineCalibration.v04.json",
+    "priorDecay": 0.96,
+    "priorLR": 0.42,
+    "regionLR": 0.95,
+    "regionShiftDecay": 0.9,
+    "write": true
+  },
+  "acceptance": {
+    "nationalMaeOk": true,
+    "partyRegionalPriorAvgAbsOk": true,
+    "partyRegionalPriorClampedShareOk": true,
+    "regionalMaeOk": true,
+    "regionalMaxOk": true
+  },
+  "final": {
+    "diagnostics": {
+      "avgAbsPartyRegionalPrior": 0.11755481368465921,
+      "avgAbsRegionShift": 0.03105408366026962,
+      "clampedPartyRegionalPriorShare": 0.017857142857142856,
+      "clampedRegionShiftShare": 0,
+      "iteration": 40,
+      "nationalGroupMaePct": 0.014278004112103226,
+      "nationalGroupMaxErrorPct": 0.02986933774272771,
+      "regionalMaePct": 0.18993192726860575,
+      "regionalMaxErrorPct": 1.4413764636136577
+    },
+    "nationalGroupSanity": [
+      {
+        "deltaPct": 0.028469254200722105,
+        "errorPct": 0.028469254200722105,
+        "groupId": "player",
+        "modeledPct": 34.53846925420073,
+        "targetPct": 34.510000000000005
+      },
+      {
+        "deltaPct": -0.02986933774272771,
+        "errorPct": 0.02986933774272771,
+        "groupId": "spolu",
+        "modeledPct": 23.33013066225727,
+        "targetPct": 23.36
+      },
+      {
+        "deltaPct": -0.02376469135442605,
+        "errorPct": 0.02376469135442605,
+        "groupId": "stan",
+        "modeledPct": 11.206235308645574,
+        "targetPct": 11.23
+      },
+      {
+        "deltaPct": -0.017755991463367593,
+        "errorPct": 0.017755991463367593,
+        "groupId": "pirates",
+        "modeledPct": 8.952244008536633,
+        "targetPct": 8.97
+      },
+      {
+        "deltaPct": 0.020953172518050955,
+        "errorPct": 0.020953172518050955,
+        "groupId": "spd",
+        "modeledPct": 7.80095317251805,
+        "targetPct": 7.779999999999999
+      },
+      {
+        "deltaPct": 0.00529734385715841,
+        "errorPct": 0.00529734385715841,
+        "groupId": "motorists",
+        "modeledPct": 6.775297343857158,
+        "targetPct": 6.77
+      },
+      {
+        "deltaPct": 0.012837288904400168,
+        "errorPct": 0.012837288904400168,
+        "groupId": "stacilo",
+        "modeledPct": 4.3128372889044,
+        "targetPct": 4.3
+      },
+      {
+        "deltaPct": 0.0014952985297589372,
+        "errorPct": 0.0014952985297589372,
+        "groupId": "prisaha",
+        "modeledPct": 1.0714952985297588,
+        "targetPct": 1.0699999999999998
+      },
+      {
+        "deltaPct": 0.00046450960184030166,
+        "errorPct": 0.00046450960184030166,
+        "groupId": "generace",
+        "modeledPct": 0.4404645096018403,
+        "targetPct": 0.44
+      },
+      {
+        "deltaPct": 0.001873152948580037,
+        "errorPct": 0.001873152948580037,
+        "groupId": "others",
+        "modeledPct": 1.5718731529485848,
+        "targetPct": 1.5700000000000047
+      }
+    ],
+    "partyAmplitude": {
+      "player": 0.7075581147225417,
+      "ods": 1.090089066177604,
+      "stan": 0.6967816916030452,
+      "pirates": 1.56094672261355,
+      "kdu": 0.8057180054356203,
+      "spd": 1.715393150330928,
+      "motorists": 1.2088248457451254,
+      "top09": 0.6872300634597938,
+      "stacilo": 0.46623092050948756,
+      "prisaha": 0.05035435405524466,
+      "generace": 0.05572980943374272,
+      "others": 0.17004923161237806
+    },
+    "partyRegionalPrior": {
+      "player": {
+        "praha": -0.35,
+        "stredocesky": 0.006834827464075409,
+        "jihocesky": 0.02529403741619652,
+        "plzensky": 0.05243559017147298,
+        "karlovarsky": 0.13360893278201455,
+        "ustecky": 0.21475741596037692,
+        "liberecky": -0.03026792038021116,
+        "kralovehradecky": -0.03208923351498825,
+        "pardubicky": -0.008742859658703386,
+        "vysocina": -0.00340032537918203,
+        "jihomoravsky": -0.025006305647953447,
+        "olomoucky": 0.15425236965938932,
+        "zlinsky": 0.09350225526282761,
+        "moravskoslezsky": 0.022984490913539903
+      },
+      "ods": {
+        "praha": 0.33368691712707577,
+        "stredocesky": 0.09364356489888023,
+        "jihocesky": -0.09623929196155719,
+        "plzensky": -0.15052026430571822,
+        "karlovarsky": -0.12991936125331346,
+        "ustecky": -0.074377851085538,
+        "liberecky": -0.0576292025402679,
+        "kralovehradecky": 0.1459475324996584,
+        "pardubicky": 0.13731307692608713,
+        "vysocina": -0.13156301180214233,
+        "jihomoravsky": -0.043526498962008844,
+        "olomoucky": -0.16040353447380987,
+        "zlinsky": -0.002794553101281015,
+        "moravskoslezsky": -0.09020499794357953
+      },
+      "stan": {
+        "praha": 0.1017723015448962,
+        "stredocesky": 0.04972145734833977,
+        "jihocesky": -0.1442735039411142,
+        "plzensky": -0.10269096300050783,
+        "karlovarsky": 0.2827599956991093,
+        "ustecky": 0.19614599665194288,
+        "liberecky": 0.2871740961307078,
+        "kralovehradecky": 0.0900758221021826,
+        "pardubicky": 0.014822227727947699,
+        "vysocina": 0.1442672039304588,
+        "jihomoravsky": -0.12961281235141098,
+        "olomoucky": -0.20280855295215128,
+        "zlinsky": -0.13626321484725434,
+        "moravskoslezsky": -0.13722490477015759
+      },
+      "pirates": {
+        "praha": 0.20413583007248512,
+        "stredocesky": -0.15750187034143107,
+        "jihocesky": -0.23767472313947174,
+        "plzensky": -0.1974818666019913,
+        "karlovarsky": -0.1883239339838232,
+        "ustecky": -0.16720555895318934,
+        "liberecky": -0.012724887413630748,
+        "kralovehradecky": 0.010052359313447324,
+        "pardubicky": 0.008905522263782193,
+        "vysocina": 0.06172972479841553,
+        "jihomoravsky": 0.0767893698219321,
+        "olomoucky": -0.06001452921384673,
+        "zlinsky": -0.02100857326413869,
+        "moravskoslezsky": 0.24583328426122014
+      },
+      "kdu": {
+        "praha": 0.33368691712707577,
+        "stredocesky": 0.09364356489888023,
+        "jihocesky": -0.09623929196155719,
+        "plzensky": -0.15052026430571822,
+        "karlovarsky": -0.12991936125331346,
+        "ustecky": -0.074377851085538,
+        "liberecky": -0.0576292025402679,
+        "kralovehradecky": 0.1459475324996584,
+        "pardubicky": 0.13731307692608713,
+        "vysocina": -0.13156301180214233,
+        "jihomoravsky": -0.043526498962008844,
+        "olomoucky": -0.16040353447380987,
+        "zlinsky": -0.002794553101281015,
+        "moravskoslezsky": -0.09020499794357953
+      },
+      "spd": {
+        "praha": 0.012570325074401785,
+        "stredocesky": -0.18298598805756786,
+        "jihocesky": 0.3047171479439581,
+        "plzensky": 0.3465432122193791,
+        "karlovarsky": -0.342546472301704,
+        "ustecky": -0.35,
+        "liberecky": 0.16161480558578992,
+        "kralovehradecky": 0.07056593714706447,
+        "pardubicky": 0.04949670893644491,
+        "vysocina": 0.010630610075142117,
+        "jihomoravsky": 0.13787339151301872,
+        "olomoucky": -0.0020426542923586296,
+        "zlinsky": -0.03843234013593366,
+        "moravskoslezsky": -0.025997806435599007
+      },
+      "motorists": {
+        "praha": -0.29891694451921613,
+        "stredocesky": 0.009675008029965031,
+        "jihocesky": 0.07249887261418793,
+        "plzensky": 0.039237031515836865,
+        "karlovarsky": -0.0786886164758984,
+        "ustecky": -0.08456013534556027,
+        "liberecky": -0.13434373939376298,
+        "kralovehradecky": -0.12693386963219658,
+        "pardubicky": -0.11176936868165452,
+        "vysocina": 0.24790626503010924,
+        "jihomoravsky": 0.19699115281102136,
+        "olomoucky": 0.0875004286806932,
+        "zlinsky": 0.09282981894125918,
+        "moravskoslezsky": 0.007399313484406126
+      },
+      "top09": {
+        "praha": 0.33368691712707577,
+        "stredocesky": 0.09364356489888023,
+        "jihocesky": -0.09623929196155719,
+        "plzensky": -0.15052026430571822,
+        "karlovarsky": -0.12991936125331346,
+        "ustecky": -0.074377851085538,
+        "liberecky": -0.0576292025402679,
+        "kralovehradecky": 0.1459475324996584,
+        "pardubicky": 0.13731307692608713,
+        "vysocina": -0.13156301180214233,
+        "jihomoravsky": -0.043526498962008844,
+        "olomoucky": -0.16040353447380987,
+        "zlinsky": -0.002794553101281015,
+        "moravskoslezsky": -0.09020499794357953
+      },
+      "stacilo": {
+        "praha": -0.04760667034159579,
+        "stredocesky": 0.0762107788979669,
+        "jihocesky": 0.21893947860919247,
+        "plzensky": 0.10482434535786457,
+        "karlovarsky": -0.35,
+        "ustecky": -0.31895583001999117,
+        "liberecky": -0.01819071765208524,
+        "kralovehradecky": 0.005900029841143616,
+        "pardubicky": 0.037951501087200086,
+        "vysocina": 0.1408286969549004,
+        "jihomoravsky": 0.12255265953373219,
+        "olomoucky": -0.026319250144869192,
+        "zlinsky": -0.05392300054103708,
+        "moravskoslezsky": -0.0346512104841712
+      },
+      "prisaha": {
+        "praha": -0.15062597384842263,
+        "stredocesky": 0.0896401932106052,
+        "jihocesky": 0.12789983170234157,
+        "plzensky": -0.02203226603979416,
+        "karlovarsky": -0.0728924966320306,
+        "ustecky": 0.029459383703338306,
+        "liberecky": -0.11088612582895528,
+        "kralovehradecky": -0.024438756598699662,
+        "pardubicky": 0.02464562815168411,
+        "vysocina": 0.06260733323075536,
+        "jihomoravsky": 0.22700653796956305,
+        "olomoucky": 0.018805503678063794,
+        "zlinsky": 0.004069770262402132,
+        "moravskoslezsky": -0.24726798011711731
+      },
+      "generace": {
+        "praha": -0.0898804819383688,
+        "stredocesky": 0.17958535951309135,
+        "jihocesky": 0.24448242133038656,
+        "plzensky": -0.17530276019538527,
+        "karlovarsky": 0.16589259499499837,
+        "ustecky": 0.14175202296915362,
+        "liberecky": -0.15783272318953798,
+        "kralovehradecky": -0.1292447646137766,
+        "pardubicky": -0.13998985827951957,
+        "vysocina": 0.045235553586598164,
+        "jihomoravsky": -0.03802229870807285,
+        "olomoucky": -0.2101753805859173,
+        "zlinsky": -0.14749942880326358,
+        "moravskoslezsky": 0.06701148258036575
+      },
+      "others": {
+        "praha": -0.03018735399788499,
+        "stredocesky": 0.07477177314564144,
+        "jihocesky": 0.1279593338261523,
+        "plzensky": 0.039800242117880365,
+        "karlovarsky": 0.13152723357519727,
+        "ustecky": 0.07763824022276758,
+        "liberecky": -0.24433614957986927,
+        "kralovehradecky": -0.234857685406098,
+        "pardubicky": -0.22292428355839247,
+        "vysocina": -0.21984854449682867,
+        "jihomoravsky": 0.056445029780610216,
+        "olomoucky": -0.013558178483278139,
+        "zlinsky": -0.05616602503184991,
+        "moravskoslezsky": 0.12740095190353862
+      }
+    },
+    "regionalSanity": {
+      "maePct": 0.18993192726860575,
+      "maxErrorPct": 1.4413764636136577,
+      "worstRows": [
+        {
+          "deltaPct": -1.4413764636136577,
+          "errorPct": 1.4413764636136577,
+          "groupId": "player",
+          "modeledPct": 43.408623536386344,
+          "regionId": "ustecky",
+          "targetPct": 44.85
+        },
+        {
+          "deltaPct": -1.027436337924179,
+          "errorPct": 1.027436337924179,
+          "groupId": "player",
+          "modeledPct": 37.69256366207582,
+          "regionId": "olomoucky",
+          "targetPct": 38.72
+        },
+        {
+          "deltaPct": -1.0263899382126525,
+          "errorPct": 1.0263899382126525,
+          "groupId": "player",
+          "modeledPct": 41.46361006178735,
+          "regionId": "karlovarsky",
+          "targetPct": 42.49
+        },
+        {
+          "deltaPct": 0.7734365847914564,
+          "errorPct": 0.7734365847914564,
+          "groupId": "spd",
+          "modeledPct": 9.903436584791457,
+          "regionId": "ustecky",
+          "targetPct": 9.13
+        },
+        {
+          "deltaPct": -0.7432301775278205,
+          "errorPct": 0.7432301775278205,
+          "groupId": "spolu",
+          "modeledPct": 33.22676982247218,
+          "regionId": "praha",
+          "targetPct": 33.97
+        },
+        {
+          "deltaPct": 0.7408937536994102,
+          "errorPct": 0.7408937536994102,
+          "groupId": "player",
+          "modeledPct": 20.57089375369941,
+          "regionId": "praha",
+          "targetPct": 19.83
+        },
+        {
+          "deltaPct": -0.7218101211227506,
+          "errorPct": 0.7218101211227506,
+          "groupId": "player",
+          "modeledPct": 34.14818987887725,
+          "regionId": "zlinsky",
+          "targetPct": 34.87
+        },
+        {
+          "deltaPct": 0.6413485373548085,
+          "errorPct": 0.6413485373548085,
+          "groupId": "spolu",
+          "modeledPct": 23.92134853735481,
+          "regionId": "vysocina",
+          "targetPct": 23.28
+        },
+        {
+          "deltaPct": 0.6355591270150605,
+          "errorPct": 0.6355591270150605,
+          "groupId": "spolu",
+          "modeledPct": 21.62555912701506,
+          "regionId": "plzensky",
+          "targetPct": 20.99
+        },
+        {
+          "deltaPct": 0.6335857216190028,
+          "errorPct": 0.6335857216190028,
+          "groupId": "spolu",
+          "modeledPct": 20.773585721619003,
+          "regionId": "olomoucky",
+          "targetPct": 20.14
+        },
+        {
+          "deltaPct": -0.5994575929066528,
+          "errorPct": 0.5994575929066528,
+          "groupId": "player",
+          "modeledPct": 36.71054240709335,
+          "regionId": "plzensky",
+          "targetPct": 37.31
+        },
+        {
+          "deltaPct": 0.5667978284437538,
+          "errorPct": 0.5667978284437538,
+          "groupId": "spolu",
+          "modeledPct": 24.176797828443753,
+          "regionId": "jihocesky",
+          "targetPct": 23.61
+        },
+        {
+          "deltaPct": -0.557765424273633,
+          "errorPct": 0.557765424273633,
+          "groupId": "player",
+          "modeledPct": 42.86223457572637,
+          "regionId": "moravskoslezsky",
+          "targetPct": 43.42
+        },
+        {
+          "deltaPct": -0.5459943962285649,
+          "errorPct": 0.5459943962285649,
+          "groupId": "spd",
+          "modeledPct": 8.334005603771436,
+          "regionId": "plzensky",
+          "targetPct": 8.88
+        },
+        {
+          "deltaPct": -0.49480151223948354,
+          "errorPct": 0.49480151223948354,
+          "groupId": "player",
+          "modeledPct": 34.375198487760514,
+          "regionId": "jihocesky",
+          "targetPct": 34.87
+        },
+        {
+          "deltaPct": 0.48001754495525617,
+          "errorPct": 0.48001754495525617,
+          "groupId": "spolu",
+          "modeledPct": 27.720017544955255,
+          "regionId": "jihomoravsky",
+          "targetPct": 27.24
+        },
+        {
+          "deltaPct": 0.4385911088263441,
+          "errorPct": 0.4385911088263441,
+          "groupId": "spolu",
+          "modeledPct": 18.418591108826345,
+          "regionId": "moravskoslezsky",
+          "targetPct": 17.98
+        },
+        {
+          "deltaPct": 0.4197785598234667,
+          "errorPct": 0.4197785598234667,
+          "groupId": "spolu",
+          "modeledPct": 15.819778559823467,
+          "regionId": "karlovarsky",
+          "targetPct": 15.4
+        },
+        {
+          "deltaPct": -0.3971699359992016,
+          "errorPct": 0.3971699359992016,
+          "groupId": "player",
+          "modeledPct": 35.7128300640008,
+          "regionId": "vysocina",
+          "targetPct": 36.11
+        },
+        {
+          "deltaPct": -0.37673837771575336,
+          "errorPct": 0.37673837771575336,
+          "groupId": "player",
+          "modeledPct": 30.74326162228425,
+          "regionId": "stredocesky",
+          "targetPct": 31.120000000000005
+        },
+        {
+          "deltaPct": 0.368468149902597,
+          "errorPct": 0.368468149902597,
+          "groupId": "stan",
+          "modeledPct": 9.728468149902596,
+          "regionId": "olomoucky",
+          "targetPct": 9.36
+        },
+        {
+          "deltaPct": -0.3647763699473572,
+          "errorPct": 0.3647763699473572,
+          "groupId": "player",
+          "modeledPct": 34.24522363005264,
+          "regionId": "pardubicky",
+          "targetPct": 34.61
+        },
+        {
+          "deltaPct": -0.3520384777547294,
+          "errorPct": 0.3520384777547294,
+          "groupId": "spd",
+          "modeledPct": 7.57796152224527,
+          "regionId": "jihocesky",
+          "targetPct": 7.93
+        },
+        {
+          "deltaPct": 0.3513231967402284,
+          "errorPct": 0.3513231967402284,
+          "groupId": "spolu",
+          "modeledPct": 18.411323196740227,
+          "regionId": "liberecky",
+          "targetPct": 18.06
+        },
+        {
+          "deltaPct": 0.3433842839335419,
+          "errorPct": 0.3433842839335419,
+          "groupId": "spolu",
+          "modeledPct": 24.58338428393354,
+          "regionId": "zlinsky",
+          "targetPct": 24.24
+        },
+        {
+          "deltaPct": 0.329369833427986,
+          "errorPct": 0.329369833427986,
+          "groupId": "stan",
+          "modeledPct": 11.089369833427986,
+          "regionId": "jihocesky",
+          "targetPct": 10.76
+        },
+        {
+          "deltaPct": 0.32644562053843096,
+          "errorPct": 0.32644562053843096,
+          "groupId": "spolu",
+          "modeledPct": 15.726445620538431,
+          "regionId": "ustecky",
+          "targetPct": 15.4
+        },
+        {
+          "deltaPct": 0.31703941303922,
+          "errorPct": 0.31703941303922,
+          "groupId": "pirates",
+          "modeledPct": 7.90703941303922,
+          "regionId": "jihocesky",
+          "targetPct": 7.59
+        },
+        {
+          "deltaPct": -0.31684216652791264,
+          "errorPct": 0.31684216652791264,
+          "groupId": "stan",
+          "modeledPct": 16.023157833472087,
+          "regionId": "liberecky",
+          "targetPct": 16.34
+        },
+        {
+          "deltaPct": 0.2979845609098053,
+          "errorPct": 0.2979845609098053,
+          "groupId": "stan",
+          "modeledPct": 10.497984560909805,
+          "regionId": "zlinsky",
+          "targetPct": 10.2
+        }
+      ]
+    },
+    "regionShift": {
+      "praha": {
+        "authority": -0.03135998229298382,
+        "culture": -0.008192448682869856,
+        "econ": 0.032217449025281515,
+        "establishment": 0.08078968268689363,
+        "globalism": 0.07897599415947229,
+        "green": 0.027081705804098168,
+        "ukraine": 0.0699866511882417
+      },
+      "stredocesky": {
+        "authority": 0.0204879580058524,
+        "culture": 0.01766601235585609,
+        "econ": -0.0015008098533591523,
+        "establishment": -0.01982394028013313,
+        "globalism": -0.025108439085372584,
+        "green": -0.017835421243279657,
+        "ukraine": -0.01686464991707229
+      },
+      "jihocesky": {
+        "authority": 0.04103358356014013,
+        "culture": 0.02873223216513035,
+        "econ": -0.034978411124010046,
+        "establishment": -0.09921633846832763,
+        "globalism": -0.11028730894046171,
+        "green": -0.038135090649309054,
+        "ukraine": -0.09605209594220275
+      },
+      "plzensky": {
+        "authority": 0.046498415945637764,
+        "culture": 0.03243966886239656,
+        "econ": -0.03365749418391213,
+        "establishment": -0.11048722271332909,
+        "globalism": -0.11527493963048421,
+        "green": -0.042853030635000275,
+        "ukraine": -0.09890024864621534
+      },
+      "karlovarsky": {
+        "authority": 0.015192054340665076,
+        "culture": -0.005713989278650262,
+        "econ": -0.015327758782832292,
+        "establishment": -0.018318201894379205,
+        "globalism": -0.00429235395764481,
+        "green": -0.005820561403351245,
+        "ukraine": -0.0012609622003655332
+      },
+      "ustecky": {
+        "authority": 0.013077938214854687,
+        "culture": -0.013470127470483166,
+        "econ": -0.01851993999232227,
+        "establishment": -0.009753392803317745,
+        "globalism": 0.008771419122079746,
+        "green": -0.0042299650482940905,
+        "ukraine": 0.014782830571156457
+      },
+      "liberecky": {
+        "authority": 0.010088868053475024,
+        "culture": 0.0012984106825741563,
+        "econ": -0.014053586283102546,
+        "establishment": -0.02615767613931739,
+        "globalism": -0.01572247708744935,
+        "green": -0.00574424101428676,
+        "ukraine": -0.01748257889354636
+      },
+      "kralovehradecky": {
+        "authority": 0.010575220644672334,
+        "culture": 0.00846141893901431,
+        "econ": -0.004854445376991936,
+        "establishment": -0.015930421061714866,
+        "globalism": -0.008110234940725415,
+        "green": -0.009548857027303393,
+        "ukraine": -0.0038215453771978944
+      },
+      "pardubicky": {
+        "authority": 0.013038000888544522,
+        "culture": 0.009813189498173011,
+        "econ": -0.006937343313199561,
+        "establishment": -0.019699405133669304,
+        "globalism": -0.014099214619623397,
+        "green": -0.011870267454571924,
+        "ukraine": -0.007927743352322275
+      },
+      "vysocina": {
+        "authority": 0.010111007247133427,
+        "culture": -0.005208398214273281,
+        "econ": -0.02756514135891318,
+        "establishment": -0.0554433453687282,
+        "globalism": -0.048339437651451676,
+        "green": -0.009481956297951816,
+        "ukraine": -0.0489384485049959
+      },
+      "jihomoravsky": {
+        "authority": 0.016683742646554645,
+        "culture": 0.007596026375099643,
+        "econ": -0.025539419450593934,
+        "establishment": -0.06454335483455317,
+        "globalism": -0.06347818461825688,
+        "green": -0.017074915419280388,
+        "ukraine": -0.058521628162556336
+      },
+      "olomoucky": {
+        "authority": 0.036810025050240856,
+        "culture": 0.015284189309931058,
+        "econ": -0.03757421167136141,
+        "establishment": -0.09560358247322455,
+        "globalism": -0.09051673211072246,
+        "green": -0.03432317505175537,
+        "ukraine": -0.07422577027765422
+      },
+      "zlinsky": {
+        "authority": 0.02564829524769114,
+        "culture": 0.012874164740280115,
+        "econ": -0.0221180577273584,
+        "establishment": -0.06090724726257516,
+        "globalism": -0.0588044585891768,
+        "green": -0.024682344929008997,
+        "ukraine": -0.04579075142915527
+      },
+      "moravskoslezsky": {
+        "authority": 0.012460107554197988,
+        "culture": -0.0014036291659990689,
+        "econ": -0.025203540874465476,
+        "establishment": -0.05430014334514297,
+        "globalism": -0.04458753289786803,
+        "green": -0.012305930765548475,
+        "ukraine": -0.03914743517352653
+      }
+    }
+  },
+  "contributionBreakdown": {
+    "nationalOnly": {
+      "label": "B national-only calibrated",
+      "nationalGroupMaePct": 1.0598738930389651e-7,
+      "nationalGroupMaxErrorPct": 1.9496096470561497e-7,
+      "regionalMaePct": 1.4997421725851967,
+      "regionalMaxErrorPct": 12.426068572418764
+    },
+    "fittedAmplitudeAndRegionShift": {
+      "label": "E fitted amplitudes + fitted region shifts only",
+      "nationalGroupMaePct": 0.0964378551751528,
+      "nationalGroupMaxErrorPct": 0.35130588966909926,
+      "regionalMaePct": 1.0587168826651507,
+      "regionalMaxErrorPct": 8.702409958879663
+    },
+    "hybrid": {
+      "label": "D hybrid fit",
+      "nationalGroupMaePct": 0.014278004112103226,
+      "nationalGroupMaxErrorPct": 0.02986933774272771,
+      "regionalMaePct": 0.18993192726860575,
+      "regionalMaxErrorPct": 1.4413764636136577
+    }
+  },
+  "comparison": [
+    {
+      "label": "A raw seed + raw field",
+      "nationalGroupMaePct": 3.357462461305264,
+      "nationalGroupMaxErrorPct": 8.970945093907346,
+      "regionalMaePct": 3.236349757529645,
+      "regionalMaxErrorPct": 21.22074454535555
+    },
+    {
+      "label": "B national-only calibrated",
+      "nationalGroupMaePct": 1.0598738930389651e-7,
+      "nationalGroupMaxErrorPct": 1.9496096470561497e-7,
+      "regionalMaePct": 1.4997421725851967,
+      "regionalMaxErrorPct": 12.426068572418764
+    },
+    {
+      "label": "C region shifts only with raw amplitudes",
+      "nationalGroupMaePct": 3.4264689773864077,
+      "nationalGroupMaxErrorPct": 10.364664273369222,
+      "regionalMaePct": 3.285668768070528,
+      "regionalMaxErrorPct": 17.621157911789616
+    },
+    {
+      "label": "E fitted amplitudes + fitted region shifts only",
+      "nationalGroupMaePct": 0.0964378551751528,
+      "nationalGroupMaxErrorPct": 0.35130588966909926,
+      "regionalMaePct": 1.0587168826651507,
+      "regionalMaxErrorPct": 8.702409958879663
+    },
+    {
+      "label": "D hybrid fit",
+      "nationalGroupMaePct": 0.014278004112103226,
+      "nationalGroupMaxErrorPct": 0.02986933774272771,
+      "regionalMaePct": 0.18993192726860575,
+      "regionalMaxErrorPct": 1.4413764636136577
+    }
+  ]
+}
