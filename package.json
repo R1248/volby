@@ -20,7 +20,8 @@
     "test:regions": "tsc --outDir .tmp-regions --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/regional-tests.ts && node .tmp-regions/scripts/regional-tests.js",
     "test:simulation": "tsc --outDir .tmp-simulation --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/simulation-tests.ts && node .tmp-simulation/scripts/simulation-tests.js",
     "sanity:model-dimensions": "tsc --outDir .tmp-model-dimensions --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/model-dimensionality-sanity.ts && node .tmp-model-dimensions/scripts/model-dimensionality-sanity.js",
-    "calibrate:voter-field-shifts": "tsc --outDir .tmp-voter-field-shifts --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/calibrate-voter-field-shifts.ts && node .tmp-voter-field-shifts/scripts/calibrate-voter-field-shifts.js"
+    "calibrate:voter-field-shifts": "tsc --outDir .tmp-voter-field-shifts --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/calibrate-voter-field-shifts.ts && node .tmp-voter-field-shifts/scripts/calibrate-voter-field-shifts.js",
+    "fit:baseline-hybrid": "tsc --outDir .tmp-baseline-hybrid --module commonjs --target es2020 --skipLibCheck --esModuleInterop --resolveJsonModule scripts/fit-baseline-hybrid.ts && node .tmp-baseline-hybrid/scripts/fit-baseline-hybrid.js"
   },
   "dependencies": {
     "@react-navigation/native": "^7.1.8",
