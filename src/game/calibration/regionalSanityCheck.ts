@@ -7,6 +7,7 @@ import {
 } from './regionalVoteTargets2025';
 
 export type RegionalSanityRow = {
+  deltaPct: number;
   errorPct: number;
   groupId: CalibrationGroupId;
   modeledPct: number;
@@ -37,17 +38,25 @@ export function regionalSanityScore(
   targets = regionalVoteTargets2025,
 ): RegionalSanityScore {
   const rows = Object.entries(targets).flatMap(([regionId, target]) => {
-    const modeledGroups = aggregateForCalibration(modeled[regionId as RegionId]);
+    const regionKey = regionId as RegionId;
+    const modeledRegion = modeled[regionKey];
+    if (!modeledRegion) {
+      throw new Error(`Missing modeled support for region ${regionId}`);
+    }
+
+    const modeledGroups = aggregateForCalibration(modeledRegion);
     return Object.keys(voteAggregationGroups).map((groupId) => {
       const calibrationGroupId = groupId as CalibrationGroupId;
       const modeledPct = modeledGroups[calibrationGroupId] * 100;
       const targetPct = target[calibrationGroupId] * 100;
+      const deltaPct = modeledPct - targetPct;
 
       return {
-        errorPct: Math.abs(modeledPct - targetPct),
+        deltaPct,
+        errorPct: Math.abs(deltaPct),
         groupId: calibrationGroupId,
         modeledPct,
-        regionId: regionId as RegionId,
+        regionId: regionKey,
         targetPct,
       };
     });
@@ -60,6 +69,6 @@ export function regionalSanityScore(
     maePct: rows.length > 0 ? totalError / rows.length : 0,
     maxErrorPct,
     rows,
-    worstRows: [...rows].sort((a, b) => b.errorPct - a.errorPct).slice(0, 12),
+    worstRows: [...rows].sort((a, b) => b.errorPct - a.errorPct).slice(0, 30),
   };
 }

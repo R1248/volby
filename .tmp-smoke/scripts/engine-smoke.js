@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const node_fs_1 = require("node:fs");
 const engine_1 = require("../src/game/engine");
+const regionalBaselineBias_1 = require("../src/game/calibration/regionalBaselineBias");
 const regionalSanityCheck_1 = require("../src/game/calibration/regionalSanityCheck");
 const mediaOutlets_1 = require("../src/data/mediaOutlets");
 const mediaMiniGameQuestions_1 = require("../src/data/mediaMiniGameQuestions");
@@ -54,6 +55,22 @@ const sanity = (0, regionalSanityCheck_1.regionalSanityScore)(baseState.regional
 assert(Number.isFinite(sanity.maePct), 'Regional sanity MAE must be finite');
 assert(Number.isFinite(sanity.maxErrorPct), 'Regional sanity maxError must be finite');
 assert(sanity.rows.length > 0, 'Regional sanity rows must be present');
+assert(sanity.rows.every((row) => Number.isFinite(row.deltaPct)), 'Regional sanity rows must expose finite signed deltaPct');
+assert(sanity.worstRows.every((row) => Number.isFinite(row.deltaPct)), 'Regional sanity worst rows must expose finite signed deltaPct');
+assert(baseState.nationalSupport.generace > 0 && baseState.nationalSupport.generace < 0.05, 'Generace support must be non-zero but not extreme');
+assert(baseState.nationalSupport.others > 0 && baseState.nationalSupport.others < 0.05, 'Others support must be non-zero but not extreme');
+const regionalBaselineBias = (0, regionalBaselineBias_1.computeRegionalBaselineBias)(baseState.regionalSupport);
+const biasedRegionalSupport = (0, engine_1.computeRegionalSupport)(baseState, {
+    regionalBaselineBias,
+    regionalBaselineBiasStrength: 1,
+});
+const biasedNationalSupport = (0, engine_1.computeNationalSupport)(baseState, biasedRegionalSupport);
+const biasedNationalSum = seed_1.partyIds.reduce((sum, partyId) => sum + biasedNationalSupport[partyId], 0);
+assert(Math.abs(biasedNationalSum - 1) < 0.000001, `Biased national support must sum to 1, got ${biasedNationalSum}`);
+for (const region of baseState.regions) {
+    const biasedRegionalSum = seed_1.partyIds.reduce((sum, partyId) => sum + biasedRegionalSupport[region.id][partyId], 0);
+    assert(Math.abs(biasedRegionalSum - 1) < 0.000001, `Biased regional support for ${region.id} must sum to 1, got ${biasedRegionalSum}`);
+}
 console.log(`Regional sanity: MAE ${sanity.maePct.toFixed(2)} pp, max ${sanity.maxErrorPct.toFixed(2)} pp`);
 for (const partyId of seed_1.partyIds) {
     const field = baseState.partyRuntime[partyId].field;

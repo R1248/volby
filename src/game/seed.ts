@@ -1480,12 +1480,12 @@ export const parties: PartySeed[] = [
     },
     color: "#607D8B",
     field: partyField({
-      amplitude: 0.14,
-      center: latent8(-0.04, -0.04, 0.04, -0.18, 0.02, 0.02, 0.02),
-      flexibility: 0.7,
-      originCenter: latent8(-0.04, -0.04, 0.04, -0.18, 0.02, 0.02, 0.02),
-      width: latent8(0.86, 0.84, 0.84, 0.82, 0.82, 0.82, 0.82),
-      salience: latent8(0.55, 0.55, 0.55, 0.65, 0.55, 0.55, 0.55),
+      amplitude: 0.16,
+      center: latent8(0.04, 0.12, 0.24, -0.46, -0.08, -0.04, 0.06),
+      flexibility: 0.58,
+      originCenter: latent8(0.04, 0.12, 0.24, -0.46, -0.08, -0.04, 0.06),
+      width: latent8(0.46, 0.44, 0.42, 0.4, 0.48, 0.48, 0.46),
+      salience: latent8(0.95, 1.0, 1.1, 1.15, 0.95, 0.9, 0.95),
     }),
     baselineTargetShare: baselineTargetShares.generace,
     id: "generace",
@@ -1541,16 +1541,17 @@ export const parties: PartySeed[] = [
   },
 
   // Others: aggregate of micro-subjects; included in vote shares but excluded from mandate allocation.
+  // TODO(calibration): replace this temporary niche field with residual allocation outside spatial utility.
   {
     coalitionBase: {},
     color: "#9E9E9E",
     field: partyField({
-      amplitude: 0.22,
-      center: latent8(0, 0, 0, -0.1, 0, 0, 0),
-      flexibility: 0.8,
-      originCenter: latent8(0, 0, 0, -0.1, 0, 0, 0),
-      width: latent8(1.05, 1.05, 1.05, 1.05, 1.05, 1.05, 1.05),
-      salience: latent8(0.25, 0.25, 0.25, 0.3, 0.25, 0.25, 0.25),
+      amplitude: 0.05,
+      center: latent8(-0.08, 0.18, 0.18, -0.42, -0.18, -0.12, -0.1),
+      flexibility: 0.45,
+      originCenter: latent8(-0.08, 0.18, 0.18, -0.42, -0.18, -0.12, -0.1),
+      width: latent8(0.44, 0.46, 0.44, 0.38, 0.46, 0.48, 0.46),
+      salience: latent8(0.95, 0.95, 1.0, 1.15, 0.95, 0.9, 0.95),
     }),
     baselineTargetShare: baselineTargetShares.others,
     id: "others",

@@ -3,6 +3,16 @@ import { baselineTargetShares, createInitialGameState, partyIds } from '../src/g
 import type { GameState, LatentDimension8D, LatentVector8D, PartyId, ReputationVector } from '../src/game/types';
 import type { RegionId } from '../src/types/region';
 import { loadClusteredRegionalizedVoterFieldV03 } from '../src/simulation/model/voterFieldLoader';
+import { computeRegionalBaselineBias } from '../src/game/calibration/regionalBaselineBias';
+import {
+  aggregateForCalibration,
+  regionalSanityScore,
+  type RegionalSanityScore,
+} from '../src/game/calibration/regionalSanityCheck';
+import {
+  type CalibrationGroupId,
+  nationalVoteTargets2025,
+} from '../src/game/calibration/regionalVoteTargets2025';
 
 const dimensions: LatentDimension8D[] = [
   'econ',
@@ -15,8 +25,10 @@ const dimensions: LatentDimension8D[] = [
 ];
 const selectedRegionIds: RegionId[] = ['vysocina', 'praha'];
 const jsonOutput = process.argv.includes('--json');
+const withRegionalBias = process.argv.includes('--with-regional-bias');
 
 type SupportRecord = Record<PartyId, number>;
+type GroupSupportRecord = Record<CalibrationGroupId, number>;
 type FieldVectorRecord = Record<LatentDimension8D, number>;
 
 type PartyDiagnostic = {
@@ -40,6 +52,7 @@ type PartyDiagnostic = {
 };
 
 type RegionalSummary = {
+  groupSupport: GroupSupportRecord;
   kduSupport: number;
   parties: Record<PartyId, number>;
   piratesSupport: number;
@@ -52,6 +65,14 @@ type RegionalSummary = {
   winnerSupport: number;
 };
 
+type GroupSanityRow = {
+  deltaPct: number;
+  errorPct: number;
+  groupId: CalibrationGroupId;
+  modeledPct: number;
+  targetPct: number;
+};
+
 type RegionPartyDiagnostic = {
   amplitude: number;
   averageKernel: number;
@@ -62,7 +83,12 @@ type RegionPartyDiagnostic = {
 
 type DebugReport = {
   afterNational: SupportRecord;
+  afterNationalGroupSanity: GroupSanityRow[];
+  afterRegionalSanity: RegionalSanityScore;
   beforeNational: SupportRecord;
+  biasedNational?: SupportRecord;
+  biasedNationalGroupSanity?: GroupSanityRow[];
+  biasedRegionalSanity?: RegionalSanityScore;
   neutralNational: SupportRecord;
   partyDiagnostics: PartyDiagnostic[];
   regionalSummary: RegionalSummary[];
@@ -91,6 +117,9 @@ function buildReport(): DebugReport {
   const neutralNational = computeNationalSupport(neutralState, neutralRegional);
 
   const afterState = initializeComputedState(createInitialGameState());
+  const afterRegionalSanity = regionalSanityScore(afterState.regionalSupport);
+  const afterNationalGroupSanity = createNationalGroupSanity(afterState.nationalSupport);
+  const biased = withRegionalBias ? createBiasedDiagnostics(afterState) : undefined;
   const partyDiagnostics = partyIds.map((partyId) =>
     createPartyDiagnostic(beforeState, afterState, beforeNational, neutralNational, afterState.nationalSupport, partyId),
   );
@@ -100,12 +129,32 @@ function buildReport(): DebugReport {
 
   return {
     afterNational: supportRecord(afterState.nationalSupport),
+    afterNationalGroupSanity,
+    afterRegionalSanity,
     beforeNational: supportRecord(beforeNational),
+    biasedNational: biased?.national,
+    biasedNationalGroupSanity: biased?.nationalGroupSanity,
+    biasedRegionalSanity: biased?.regionalSanity,
     neutralNational: supportRecord(neutralNational),
     partyDiagnostics,
     regionalSummary: afterState.regions.map((region) => createRegionalSummary(afterState, region.id)),
     selectedRegionDiagnostics,
     targets: supportRecord(baselineTargetShares),
+  };
+}
+
+function createBiasedDiagnostics(afterState: GameState) {
+  const regionalBaselineBias = computeRegionalBaselineBias(afterState.regionalSupport);
+  const regionalSupport = computeRegionalSupport(afterState, {
+    regionalBaselineBias,
+    regionalBaselineBiasStrength: 1,
+  });
+  const nationalSupport = computeNationalSupport(afterState, regionalSupport);
+
+  return {
+    national: supportRecord(nationalSupport),
+    nationalGroupSanity: createNationalGroupSanity(nationalSupport),
+    regionalSanity: regionalSanityScore(regionalSupport),
   };
 }
 
@@ -165,6 +214,22 @@ function printTextReport(debugReport: DebugReport) {
   console.log('\nTargets');
   printSupport(debugReport.targets);
 
+  console.log('\nNational group target sanity');
+  printGroupSanityRows(debugReport.afterNationalGroupSanity);
+
+  printRegionalSanity('Regional target sanity after calibration', debugReport.afterRegionalSanity, 30);
+
+  if (debugReport.biasedRegionalSanity && debugReport.biasedNationalGroupSanity) {
+    printRegionalSanity('Regional target sanity with diagnostic regional bias', debugReport.biasedRegionalSanity, 30);
+    console.log(
+      `\nRegional bias diagnostic delta: MAE ${formatSignedPp(
+        debugReport.biasedRegionalSanity.maePct - debugReport.afterRegionalSanity.maePct,
+      )}, maxError ${formatSignedPp(debugReport.biasedRegionalSanity.maxErrorPct - debugReport.afterRegionalSanity.maxErrorPct)}`,
+    );
+    console.log('\nNational group target sanity with diagnostic regional bias');
+    printGroupSanityRows(debugReport.biasedNationalGroupSanity);
+  }
+
   console.log('\nFinal calibrated party field diagnostics');
   for (const diagnostic of debugReport.partyDiagnostics) {
     console.log(
@@ -221,7 +286,11 @@ function printTextReport(debugReport: DebugReport) {
     console.log(
       `${region.regionId}: winner ${region.winner} ${formatPercent(region.winnerSupport)} | top3 ${top3} | ANO ${formatPercent(
         region.playerSupport,
-      )} | SPD ${formatPercent(region.spdSupport)} | Pirates ${formatPercent(region.piratesSupport)} | KDU ${formatPercent(
+      )} | SPOLU ${formatPercent(region.groupSupport.spolu)} | STAN ${formatPercent(region.groupSupport.stan)} | Pirates ${formatPercent(
+        region.piratesSupport,
+      )} | SPD ${formatPercent(region.spdSupport)} | Motorists ${formatPercent(region.groupSupport.motorists)} | Stacilo ${formatPercent(
+        region.groupSupport.stacilo,
+      )} | Others ${formatPercent(region.groupSupport.others)} | KDU ${formatPercent(
         region.kduSupport,
       )} | TOP09 ${formatPercent(region.top09Support)}`,
     );
@@ -245,6 +314,28 @@ function printSupport(support: Partial<Record<PartyId, number>>) {
   }
 }
 
+function printGroupSanityRows(rows: GroupSanityRow[]) {
+  for (const row of rows) {
+    console.log(
+      `${row.groupId}: modeled ${formatPercentFromPct(row.modeledPct)} | target ${formatPercentFromPct(
+        row.targetPct,
+      )} | delta ${formatSignedPp(row.deltaPct)} | error ${formatPp(row.errorPct)}`,
+    );
+  }
+}
+
+function printRegionalSanity(title: string, sanity: RegionalSanityScore, rowLimit: number) {
+  console.log(`\n${title}`);
+  console.log(`MAE ${formatPp(sanity.maePct)} | max error ${formatPp(sanity.maxErrorPct)}`);
+  for (const row of sanity.worstRows.slice(0, rowLimit)) {
+    console.log(
+      `${row.regionId} | ${row.groupId} | modeled ${formatPercentFromPct(row.modeledPct)} | target ${formatPercentFromPct(
+        row.targetPct,
+      )} | delta ${formatSignedPp(row.deltaPct)} | error ${formatPp(row.errorPct)}`,
+    );
+  }
+}
+
 function printSortedSummary(
   title: string,
   diagnostics: PartyDiagnostic[],
@@ -259,12 +350,14 @@ function printSortedSummary(
 
 function createRegionalSummary(state: GameState, regionId: RegionId): RegionalSummary {
   const parties = supportRecord(state.regionalSupport[regionId]);
+  const groupSupport = aggregateForCalibration(parties);
   const top3 = partyIds
     .map((partyId) => ({ partyId, support: parties[partyId] }))
     .sort((a, b) => b.support - a.support)
     .slice(0, 3);
 
   return {
+    groupSupport,
     kduSupport: parties.kdu,
     parties,
     piratesSupport: parties.pirates,
@@ -276,6 +369,24 @@ function createRegionalSummary(state: GameState, regionId: RegionId): RegionalSu
     winner: top3[0]?.partyId ?? 'player',
     winnerSupport: top3[0]?.support ?? 0,
   };
+}
+
+function createNationalGroupSanity(support: Record<PartyId, number>): GroupSanityRow[] {
+  const groupSupport = aggregateForCalibration(support);
+  return Object.entries(nationalVoteTargets2025).map(([groupId, target]) => {
+    const calibrationGroupId = groupId as CalibrationGroupId;
+    const modeledPct = groupSupport[calibrationGroupId] * 100;
+    const targetPct = target * 100;
+    const deltaPct = modeledPct - targetPct;
+
+    return {
+      deltaPct,
+      errorPct: Math.abs(deltaPct),
+      groupId: calibrationGroupId,
+      modeledPct,
+      targetPct,
+    };
+  });
 }
 
 function diagnosticsForRegion(state: GameState, regionId: RegionId, partyId: PartyId): RegionPartyDiagnostic {
@@ -381,6 +492,18 @@ function formatVector(vector: FieldVectorRecord) {
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(2)} %`;
+}
+
+function formatPercentFromPct(value: number) {
+  return `${value.toFixed(2)} %`;
+}
+
+function formatPp(value: number) {
+  return `${value.toFixed(2)} pp`;
+}
+
+function formatSignedPp(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)} pp`;
 }
 
 function regionIdFromKraj(krajId?: string): RegionId | undefined {

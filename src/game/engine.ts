@@ -4,6 +4,7 @@ import { aggregateRegionalWeightByGameRegion } from '../simulation/engine/region
 import type { VoterPoint } from '../simulation/model/types';
 import { applyCampaignActionV2, preparedTurnoutProbability, previewCampaignActionV2 } from './actionEngine';
 import { calibratePartyAmplitudesToTargets, type BaselineSupportOptions } from './baselineCalibration';
+import { regionalBaselineBiasUtilityModifier } from './calibration/regionalBaselineBias';
 import { createIssueLayerState } from './issueSeed';
 import { generateWeeklyMediaInvitations, mediaSentimentFromResult, resolveMediaAppearance } from './mediaEngine';
 import { mediaOutlets, voterClusters } from '../data/mediaOutlets';
@@ -1018,6 +1019,12 @@ function computeParticleUtilityForContext(
     ? 0
     : issueLayerUtilityModifier(state.issueLayer, compactPointToSegment(point), partyId === 'player');
   const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
+  const regionalBaselineBiasModifier = regionalBaselineBiasUtilityModifier(
+    partyId,
+    region.id,
+    options.regionalBaselineBias,
+    options.regionalBaselineBiasStrength ?? 0,
+  );
   const scandalPenalty = state.scandals
     .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
     .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -1029,7 +1036,8 @@ function computeParticleUtilityForContext(
     programModifier -
     fatiguePenalty -
     scandalPenalty +
-    mediaClusterModifier;
+    mediaClusterModifier +
+    regionalBaselineBiasModifier;
 
   return Math.max(0.001, Math.exp(logUtility));
 }

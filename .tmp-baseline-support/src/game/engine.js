@@ -28,6 +28,7 @@ const seed_1 = require("./seed");
 const regionalAggregation_1 = require("../simulation/engine/regionalAggregation");
 const actionEngine_1 = require("./actionEngine");
 const baselineCalibration_1 = require("./baselineCalibration");
+const regionalBaselineBias_1 = require("./calibration/regionalBaselineBias");
 const issueSeed_1 = require("./issueSeed");
 const mediaEngine_1 = require("./mediaEngine");
 const mediaOutlets_1 = require("../data/mediaOutlets");
@@ -200,11 +201,15 @@ function computeElectionResult(state) {
     };
 }
 function estimateSeats(nationalSupport) {
-    const eligible = seed_1.partyIds.filter((partyId) => nationalSupport[partyId] >= 0.05);
+    const eligible = seed_1.partyIds.filter((partyId) => {
+        const party = seed_1.parties.find((item) => item.id === partyId);
+        return party?.mandateEligible !== false && nationalSupport[partyId] >= 0.05;
+    });
     const quotients = eligible.flatMap((partyId) => Array.from({ length: 200 }, (_, index) => ({
         partyId,
         value: nationalSupport[partyId] / (index + 1),
     })));
+    // TODO(v0.6 mandates): replace national D'Hondt with a realistic regional mandate allocation.
     quotients.sort((a, b) => b.value - a.value);
     const seats = Object.fromEntries(seed_1.partyIds.map((partyId) => [partyId, 0]));
     for (const quotient of quotients.slice(0, 200)) {
@@ -785,6 +790,7 @@ function computeParticleUtilityForContext(state, context, region, point, options
         ? 0
         : (0, issueEngine_1.issueLayerUtilityModifier)(state.issueLayer, compactPointToSegment(point), partyId === 'player');
     const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
+    const regionalBaselineBiasModifier = (0, regionalBaselineBias_1.regionalBaselineBiasUtilityModifier)(partyId, region.id, options.regionalBaselineBias, options.regionalBaselineBiasStrength ?? 0);
     const scandalPenalty = state.scandals
         .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
         .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -795,7 +801,8 @@ function computeParticleUtilityForContext(state, context, region, point, options
         programModifier -
         fatiguePenalty -
         scandalPenalty +
-        mediaClusterModifier;
+        mediaClusterModifier +
+        regionalBaselineBiasModifier;
     return Math.max(0.001, Math.exp(logUtility));
 }
 function mediaClusterUtilityModifier(state, point) {
@@ -1006,7 +1013,9 @@ function applyEvents(state, events, actionEffects, riskNotes) {
     }
 }
 function applyOpponentMoves(state, rngSeed, opponentMoves, riskNotes) {
-    const opponents = seed_1.partyIds.filter((partyId) => partyId !== 'player');
+    const opponents = state.parties
+        .filter((party) => party.id !== 'player' && party.mandateEligible !== false)
+        .map((party) => party.id);
     for (const partyId of opponents) {
         const roll = randomFromSeed(rngSeed + state.week * 31 + partyId.length);
         const region = selectOpponentTargetRegion(state, partyId, rngSeed);

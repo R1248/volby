@@ -1,7 +1,10 @@
 import type { GameState, PartyId } from './types';
+import type { RegionalBaselineBias } from './calibration/regionalBaselineBias';
 
 export type BaselineSupportOptions = {
   disableProgramModifier?: boolean;
+  regionalBaselineBias?: RegionalBaselineBias;
+  regionalBaselineBiasStrength?: number;
 };
 
 type SupportResolver = (

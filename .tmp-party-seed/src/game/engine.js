@@ -28,6 +28,7 @@ const seed_1 = require("./seed");
 const regionalAggregation_1 = require("../simulation/engine/regionalAggregation");
 const actionEngine_1 = require("./actionEngine");
 const baselineCalibration_1 = require("./baselineCalibration");
+const regionalBaselineBias_1 = require("./calibration/regionalBaselineBias");
 const issueSeed_1 = require("./issueSeed");
 const mediaEngine_1 = require("./mediaEngine");
 const mediaOutlets_1 = require("../data/mediaOutlets");
@@ -789,6 +790,7 @@ function computeParticleUtilityForContext(state, context, region, point, options
         ? 0
         : (0, issueEngine_1.issueLayerUtilityModifier)(state.issueLayer, compactPointToSegment(point), partyId === 'player');
     const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
+    const regionalBaselineBiasModifier = (0, regionalBaselineBias_1.regionalBaselineBiasUtilityModifier)(partyId, region.id, options.regionalBaselineBias, options.regionalBaselineBiasStrength ?? 0);
     const scandalPenalty = state.scandals
         .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
         .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -799,7 +801,8 @@ function computeParticleUtilityForContext(state, context, region, point, options
         programModifier -
         fatiguePenalty -
         scandalPenalty +
-        mediaClusterModifier;
+        mediaClusterModifier +
+        regionalBaselineBiasModifier;
     return Math.max(0.001, Math.exp(logUtility));
 }
 function mediaClusterUtilityModifier(state, point) {
