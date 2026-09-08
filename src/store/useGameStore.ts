@@ -1,27 +1,36 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
-import { mediaOutlets } from '@/src/data/mediaOutlets';
-import { campaignActionsV2 } from '@/src/game/campaignActionsV2';
+import { mediaOutlets } from "@/src/data/mediaOutlets";
+import { campaignActionsV2 } from "@/src/game/campaignActionsV2";
 import {
   acceptSponsor,
   answerQuestion,
   answerCampaignTrip as applyCampaignTripAnswer,
   answerDebateAttack as applyDebateAnswer,
-  answerProgramMediaQuestion as applyProgramMediaAnswer,
   hireMarketingAdvisor as applyMarketingAdvisor,
-  initializeComputedState,
-  publishPublicPoll as applyPublicPoll,
-  receiveMediaInvitations as applyReceiveMediaInvitations,
   respondToMediaAppearance as applyMediaAppearanceDecision,
   respondToMediaInvitation as applyMediaInvitationResponse,
+  updateProgramIssue as applyProgramIssueUpdate,
+  answerProgramMediaQuestion as applyProgramMediaAnswer,
+  publishPublicPoll as applyPublicPoll,
+  receiveMediaInvitations as applyReceiveMediaInvitations,
+  initializeComputedState,
   prepareWeek,
   resolvePreparedWeek,
-  updateProgramIssue as applyProgramIssueUpdate,
-} from '@/src/game/engine';
-import { createIssueLayerState } from '@/src/game/issueSeed';
-import type { PartyIssuePosition, ProgramIssueId } from '@/src/game/issueTypes';
-import { DEFAULT_BASELINE_MODE, createInitialGameState, marketingAdvisors } from '@/src/game/seed';
-import { loadLatestGame, resetSave, saveGame, saveTurnSnapshot } from '@/src/game/storage';
+} from "@/src/game/engine";
+import { createIssueLayerState } from "@/src/game/issueSeed";
+import type { PartyIssuePosition, ProgramIssueId } from "@/src/game/issueTypes";
+import {
+  DEFAULT_BASELINE_MODE,
+  createInitialGameState,
+  marketingAdvisors,
+} from "@/src/game/seed";
+import {
+  loadLatestGame,
+  resetSave,
+  saveGame,
+  saveTurnSnapshot,
+} from "@/src/game/storage";
 import type {
   GameState,
   MarketingAdvisorId,
@@ -29,8 +38,8 @@ import type {
   MediaInvitation,
   PartyId,
   PlannedAction,
-} from '@/src/game/types';
-import type { RegionId } from '@/src/types/region';
+} from "@/src/game/types";
+import type { RegionId } from "@/src/types/region";
 
 type GameStore = {
   acceptSponsorOffer: (sponsorId: string) => void;
@@ -46,12 +55,22 @@ type GameStore = {
   isHydrated: boolean;
   plannedActions: PlannedAction[];
   prepareCurrentWeek: () => void;
-  planCampaignActionV2: (actionV2Id: string, targetRegionId?: RegionId, targetProgramIssueId?: ProgramIssueId) => boolean;
+  planCampaignActionV2: (
+    actionV2Id: string,
+    targetRegionId?: RegionId,
+    targetProgramIssueId?: ProgramIssueId,
+  ) => boolean;
   removePlannedAction: (plannedActionId: string) => void;
   resetGame: () => void;
   respondToEarnedMediaInvitation: (decision: MediaAppearanceDecision) => void;
-  respondToInvitation: (invitationId: string, response: NonNullable<MediaInvitation['response']>) => void;
-  respondToMediaInvitation: (invitationId: string, response: NonNullable<MediaInvitation['response']>) => void;
+  respondToInvitation: (
+    invitationId: string,
+    response: NonNullable<MediaInvitation["response"]>,
+  ) => void;
+  respondToMediaInvitation: (
+    invitationId: string,
+    response: NonNullable<MediaInvitation["response"]>,
+  ) => void;
   saveGameNow: () => Promise<void>;
   selectedRegionId: RegionId;
   selectRegion: (regionId: RegionId) => void;
@@ -59,11 +78,18 @@ type GameStore = {
   resolvePlannedWeek: () => void;
   updateProgramIssue: (
     issueId: ProgramIssueId,
-    patch: Partial<Pick<PartyIssuePosition, 'framingId' | 'position' | 'rigidity' | 'salience'>>,
+    patch: Partial<
+      Pick<
+        PartyIssuePosition,
+        "framingId" | "position" | "rigidity" | "salience"
+      >
+    >,
   ) => void;
 };
 
-const initialState = prepareWeek(initializeComputedState(createInitialGameState()));
+const initialState = prepareWeek(
+  initializeComputedState(createInitialGameState()),
+);
 
 function migrateStaffCap(staffCap?: number) {
   if (staffCap === undefined) {
@@ -89,15 +115,18 @@ function asFullRealismState(state: GameState): GameState {
         ...runtime,
         actionCooldowns: runtime.actionCooldowns ?? {},
         legalExposure: runtime.legalExposure ?? 0,
-        marketingAdvisorId: runtime.marketingAdvisorId ?? 'none',
-        mediaVulnerability: runtime.mediaVulnerability ?? state.issueLayer?.player?.mediaVulnerability ?? 0,
+        marketingAdvisorId: runtime.marketingAdvisorId ?? "none",
+        mediaVulnerability:
+          runtime.mediaVulnerability ??
+          state.issueLayer?.player?.mediaVulnerability ??
+          0,
         momentum: runtime.momentum ?? 0.5,
         parliamentAttendance: runtime.parliamentAttendance,
         staffCap: migrateStaffCap(runtime.staffCap),
         staffUsed: runtime.staffUsed ?? 0,
       },
     ]),
-  ) as GameState['partyRuntime'];
+  ) as GameState["partyRuntime"];
 
   return {
     ...state,
@@ -109,18 +138,24 @@ function asFullRealismState(state: GameState): GameState {
     mediaAppearanceResults: state.mediaAppearanceResults ?? [],
     mediaClusterModifiers: state.mediaClusterModifiers ?? [],
     pendingMediaEffects: state.pendingMediaEffects ?? [],
-    mode: 'fullRealism',
+    mode: "fullRealism",
     partyRuntime,
-    publicPollsterId: state.publicPollsterId ?? 'medianPlus',
+    publicPollsterId: state.publicPollsterId ?? "medianPlus",
     turnoutModifiers: state.turnoutModifiers ?? [],
   };
 }
 
-function migrateIssueLayer(issueLayer: GameState['issueLayer']): GameState['issueLayer'] {
-  const { campaignPackages: _campaignPackages, ...layerWithoutPackages } = issueLayer as GameState['issueLayer'] & {
-    campaignPackages?: unknown[];
-  };
-  const { activeCampaignPackages: _activeCampaignPackages, ...playerWithoutPackages } = layerWithoutPackages.player as typeof layerWithoutPackages.player & {
+function migrateIssueLayer(
+  issueLayer: GameState["issueLayer"],
+): GameState["issueLayer"] {
+  const { campaignPackages: _campaignPackages, ...layerWithoutPackages } =
+    issueLayer as GameState["issueLayer"] & {
+      campaignPackages?: unknown[];
+    };
+  const {
+    activeCampaignPackages: _activeCampaignPackages,
+    ...playerWithoutPackages
+  } = layerWithoutPackages.player as typeof layerWithoutPackages.player & {
     activeCampaignPackages?: string[];
   };
 
@@ -128,24 +163,30 @@ function migrateIssueLayer(issueLayer: GameState['issueLayer']): GameState['issu
     ...layerWithoutPackages,
     player: {
       ...playerWithoutPackages,
-      maxProgramChangesPerWeek: playerWithoutPackages.maxProgramChangesPerWeek ?? 3,
+      maxProgramChangesPerWeek:
+        playerWithoutPackages.maxProgramChangesPerWeek ?? 3,
       programChangesThisWeek: playerWithoutPackages.programChangesThisWeek ?? 0,
     },
     resolvedCampaignTripIds: layerWithoutPackages.resolvedCampaignTripIds ?? [],
     resolvedDebateAttackIds: layerWithoutPackages.resolvedDebateAttackIds ?? [],
-    resolvedMediaQuestionIds: layerWithoutPackages.resolvedMediaQuestionIds ?? [],
+    resolvedMediaQuestionIds:
+      layerWithoutPackages.resolvedMediaQuestionIds ?? [],
   };
 }
 
 function createGameWithSelectedParty(selectedPartyId: PartyId) {
   const baseState = createInitialGameState();
-  const selectedParty = baseState.parties.find((party) => party.id === selectedPartyId);
-  const defaultPlayer = baseState.parties.find((party) => party.id === 'player');
+  const selectedParty = baseState.parties.find(
+    (party) => party.id === selectedPartyId,
+  );
+  const defaultPlayer = baseState.parties.find(
+    (party) => party.id === "player",
+  );
 
-  if (selectedParty && defaultPlayer && selectedPartyId !== 'player') {
+  if (selectedParty && defaultPlayer && selectedPartyId !== "player") {
     baseState.parties = baseState.parties.map((party) => {
-      if (party.id === 'player') {
-        return { ...selectedParty, id: 'player', playable: true };
+      if (party.id === "player") {
+        return { ...selectedParty, id: "player", playable: true };
       }
 
       if (party.id === selectedPartyId) {
@@ -162,22 +203,30 @@ function createGameWithSelectedParty(selectedPartyId: PartyId) {
     };
   }
 
-  return prepareWeek(initializeComputedState(asFullRealismState({
-    ...baseState,
-    playerPartyId: 'player',
-  })));
+  return prepareWeek(
+    initializeComputedState(
+      asFullRealismState({
+        ...baseState,
+        playerPartyId: "player",
+      }),
+    ),
+  );
 }
 
 function plannedCost(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const action = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
+    const action = state.campaignActionsV2?.find(
+      (candidate) => candidate.id === plannedAction.actionV2Id,
+    );
     return sum + (action?.cost ?? 0);
   }, 0);
 }
 
 function plannedCapacity(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const actionV2 = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
+    const actionV2 = state.campaignActionsV2?.find(
+      (candidate) => candidate.id === plannedAction.actionV2Id,
+    );
     return sum + (actionV2?.staffCost ?? 0);
   }, 0);
 }
@@ -188,14 +237,18 @@ function persist(state: GameState, plannedActions: PlannedAction[] = []) {
 
 function plannedLegalCost(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const action = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
-    return sum + (action && action.legality !== 'illegal' ? action.cost : 0);
+    const action = state.campaignActionsV2?.find(
+      (candidate) => candidate.id === plannedAction.actionV2Id,
+    );
+    return sum + (action && action.legality !== "illegal" ? action.cost : 0);
   }, 0);
 }
 
 function plannedLeaderTime(state: GameState, plannedActions: PlannedAction[]) {
   return plannedActions.reduce((sum, plannedAction) => {
-    const actionV2 = state.campaignActionsV2?.find((candidate) => candidate.id === plannedAction.actionV2Id);
+    const actionV2 = state.campaignActionsV2?.find(
+      (candidate) => candidate.id === plannedAction.actionV2Id,
+    );
     return sum + (actionV2?.leaderTimeCost ?? 0);
   }, 0);
 }
@@ -207,7 +260,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     persist(nextState, get().plannedActions);
   },
   answerCampaignTrip: (tripId, optionId) => {
-    const nextState = applyCampaignTripAnswer(get().gameState, tripId, optionId);
+    const nextState = applyCampaignTripAnswer(
+      get().gameState,
+      tripId,
+      optionId,
+    );
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },
@@ -222,7 +279,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     persist(nextState, get().plannedActions);
   },
   answerProgramMediaQuestion: (questionId, answerId) => {
-    const nextState = applyProgramMediaAnswer(get().gameState, questionId, answerId);
+    const nextState = applyProgramMediaAnswer(
+      get().gameState,
+      questionId,
+      answerId,
+    );
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },
@@ -232,7 +293,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     persist(nextState, get().plannedActions);
   },
   receiveMediaInvitations: (invitations) => {
-    const nextState = applyReceiveMediaInvitations(get().gameState, invitations);
+    const nextState = applyReceiveMediaInvitations(
+      get().gameState,
+      invitations,
+    );
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },
@@ -246,13 +310,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const loaded = await loadLatestGame();
 
     if (loaded) {
-      const gameState = prepareWeek(initializeComputedState(asFullRealismState(loaded.state)));
+      const gameState = prepareWeek(
+        initializeComputedState(asFullRealismState(loaded.state)),
+      );
       set({
         gameState,
         isHydrated: true,
         plannedActions: loaded.plannedActions,
       });
-      persist(gameState, loaded.plannedActions);
+
+      // Legacy saves need their newly prepared weekly context persisted once.
+      // Already-prepared saves should not create a new save row on every app launch.
+      if (!loaded.state.preparedWeek) {
+        persist(gameState, loaded.plannedActions);
+      }
+
       return;
     }
 
@@ -271,7 +343,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   planCampaignActionV2: (actionV2Id, targetRegionId, targetProgramIssueId) => {
     get().prepareCurrentWeek();
     const { gameState, plannedActions } = get();
-    const action = gameState.campaignActionsV2.find((item) => item.id === actionV2Id);
+    const action = gameState.campaignActionsV2.find(
+      (item) => item.id === actionV2Id,
+    );
     const runtime = gameState.partyRuntime.player;
 
     if (!action) {
@@ -282,23 +356,46 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return false;
     }
 
-    if (action.legality !== 'illegal' && runtime.legalSpend + plannedLegalCost(gameState, plannedActions) + action.cost > gameState.rules.legalSpendCap) {
+    if (
+      action.legality !== "illegal" &&
+      runtime.legalSpend +
+        plannedLegalCost(gameState, plannedActions) +
+        action.cost >
+        gameState.rules.legalSpendCap
+    ) {
       return false;
     }
 
-    if (runtime.legalSpend + runtime.graySpend + runtime.thirdPartySpend + plannedCost(gameState, plannedActions) + action.cost > gameState.rules.spendCap) {
+    if (
+      runtime.legalSpend +
+        runtime.graySpend +
+        runtime.thirdPartySpend +
+        plannedCost(gameState, plannedActions) +
+        action.cost >
+      gameState.rules.spendCap
+    ) {
       return false;
     }
 
-    if ((runtime.staffUsed ?? 0) + plannedCapacity(gameState, plannedActions) + action.staffCost > (runtime.staffCap ?? 6)) {
+    if (
+      (runtime.staffUsed ?? 0) +
+        plannedCapacity(gameState, plannedActions) +
+        action.staffCost >
+      (runtime.staffCap ?? 6)
+    ) {
       return false;
     }
 
-    if (runtime.leader.timeUsed + plannedLeaderTime(gameState, plannedActions) + action.leaderTimeCost > runtime.leader.timeCap) {
+    if (
+      runtime.leader.timeUsed +
+        plannedLeaderTime(gameState, plannedActions) +
+        action.leaderTimeCost >
+      runtime.leader.timeCap
+    ) {
       return false;
     }
 
-    if (action.target.scope === 'region' && !targetRegionId) {
+    if (action.target.scope === "region" && !targetRegionId) {
       return false;
     }
 
@@ -306,8 +403,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...plannedActions,
       {
         actionV2Id,
-        id: `${actionV2Id}-${targetRegionId ?? 'national'}-${gameState.week}-${plannedActions.length}`,
-        targetProgramIssueId: action.target.scope === 'issue' ? targetProgramIssueId : undefined,
+        id: `${actionV2Id}-${targetRegionId ?? "national"}-${gameState.week}-${plannedActions.length}`,
+        targetProgramIssueId:
+          action.target.scope === "issue" ? targetProgramIssueId : undefined,
         targetRegionId,
       },
     ];
@@ -317,14 +415,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return true;
   },
   removePlannedAction: (plannedActionId) => {
-    const nextPlannedActions = get().plannedActions.filter((item) => item.id !== plannedActionId);
+    const nextPlannedActions = get().plannedActions.filter(
+      (item) => item.id !== plannedActionId,
+    );
     set({ plannedActions: nextPlannedActions });
     persist(get().gameState, nextPlannedActions);
   },
   resetGame: () => {
-    const nextState = createGameWithSelectedParty('player');
+    const nextState = createGameWithSelectedParty("player");
 
-    set({ gameState: nextState, plannedActions: [], selectedRegionId: 'praha' });
+    set({
+      gameState: nextState,
+      plannedActions: [],
+      selectedRegionId: "praha",
+    });
     void resetSave().then(() => saveGame(nextState, []));
   },
   respondToEarnedMediaInvitation: (decision) => {
@@ -333,7 +437,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     persist(nextState, get().plannedActions);
   },
   respondToInvitation: (invitationId, response) => {
-    const nextState = applyMediaInvitationResponse(get().gameState, invitationId, response);
+    const nextState = applyMediaInvitationResponse(
+      get().gameState,
+      invitationId,
+      response,
+    );
     set({ gameState: nextState });
     persist(nextState, get().plannedActions);
   },
@@ -356,11 +464,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   saveGameNow: async () => {
     await saveGame(get().gameState, get().plannedActions);
   },
-  selectedRegionId: 'praha',
+  selectedRegionId: "praha",
   selectRegion: (regionId) => set({ selectedRegionId: regionId }),
   startNewGame: (selectedPartyId) => {
     const nextState = createGameWithSelectedParty(selectedPartyId);
-    set({ gameState: nextState, plannedActions: [], selectedRegionId: 'praha' });
+    set({
+      gameState: nextState,
+      plannedActions: [],
+      selectedRegionId: "praha",
+    });
     void resetSave().then(() => saveGame(nextState, []));
   },
   updateProgramIssue: (issueId, patch) => {

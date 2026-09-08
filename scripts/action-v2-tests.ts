@@ -1,35 +1,61 @@
-import { applyCampaignActionV2, getCampaignPhase, getCampaignTimingMultipliers } from '../src/game/actionEngine';
+import {
+  applyCampaignActionV2,
+  getCampaignPhase,
+  getCampaignTimingMultipliers,
+} from "../src/game/actionEngine";
 import {
   analyticsActionTemplates,
   campaignActionsV2,
   campaignActionTemplates,
   eventResponseTemplates,
   mediaOpportunityTemplates,
-} from '../src/game/campaignActionsV2';
-import { computeNationalSupport, computeRegionalSupport, initializeComputedState, resolveTurn } from '../src/game/engine';
-import { createInitialGameState, partyIds } from '../src/game/seed';
-import type { CampaignActionCategory, CampaignActionLegality, GameState, PlannedAction } from '../src/game/types';
+} from "../src/game/campaignActionsV2";
+import {
+  computeNationalSupport,
+  computeRegionalSupport,
+  initializeComputedState,
+  resolveTurn,
+} from "../src/game/engine";
+import { createInitialGameState, partyIds } from "../src/game/seed";
+import type {
+  CampaignActionCategory,
+  CampaignActionLegality,
+  GameState,
+  PlannedAction,
+} from "../src/game/types";
 
 const validCategories = new Set<CampaignActionCategory>([
-  'field',
-  'ads',
-  'media',
-  'digital',
-  'program',
-  'parliament',
-  'analytics',
-  'organization',
-  'coalition',
-  'turnout',
-  'crisis',
-  'negative',
-  'ally',
-  'grayZone',
-  'blackOps',
+  "field",
+  "ads",
+  "media",
+  "digital",
+  "program",
+  "parliament",
+  "analytics",
+  "organization",
+  "coalition",
+  "turnout",
+  "crisis",
+  "negative",
+  "ally",
+  "grayZone",
+  "blackOps",
 ]);
-const validLegalities = new Set<CampaignActionLegality>(['clean', 'gray', 'illegal']);
-const forbiddenCampaignCategories = new Set(['analytics', 'media', 'crisis', 'organization', 'parliament', 'final']);
-const forbiddenTimingNames = /posledni tyden|poslední týden|v den voleb|pozdni|pozdní/i;
+const validLegalities = new Set<CampaignActionLegality>([
+  "clean",
+  "gray",
+  "illegal",
+]);
+const forbiddenCampaignCategories = new Set([
+  "analytics",
+  "media",
+  "crisis",
+  "organization",
+  "parliament",
+  "final",
+]);
+const forbiddenTimingNames =
+  /posledni tyden|poslední týden|v den voleb|pozdni|pozdní/i;
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -41,7 +67,10 @@ function cloneState(state: GameState): GameState {
   return JSON.parse(JSON.stringify(state)) as GameState;
 }
 
-function planned(actionV2Id: string, patch: Partial<PlannedAction> = {}): PlannedAction {
+function planned(
+  actionV2Id: string,
+  patch: Partial<PlannedAction> = {},
+): PlannedAction {
   return {
     actionV2Id,
     id: `test-${actionV2Id}`,
@@ -49,25 +78,51 @@ function planned(actionV2Id: string, patch: Partial<PlannedAction> = {}): Planne
   };
 }
 
-assert(campaignActionsV2.length >= 25, `Expected at least 25 CampaignActionV2 entries, got ${campaignActionsV2.length}`);
+assert(
+  campaignActionsV2.length >= 25,
+  `Expected at least 25 CampaignActionV2 entries, got ${campaignActionsV2.length}`,
+);
 
 for (const template of campaignActionTemplates) {
-  assert(template.placement === 'campaign', `${template.id} must have campaign placement`);
-  assert(template.availability === 'player_initiated', `${template.id} must be player initiated`);
-  assert(!forbiddenCampaignCategories.has(template.category), `${template.id} has forbidden campaign category ${template.category}`);
-  assert(!forbiddenTimingNames.test(template.name), `${template.id} has time-specific name ${template.name}`);
+  assert(
+    template.placement === "campaign",
+    `${template.id} must have campaign placement`,
+  );
+  assert(
+    template.availability === "player_initiated",
+    `${template.id} must be player initiated`,
+  );
+  assert(
+    !forbiddenCampaignCategories.has(template.category),
+    `${template.id} has forbidden campaign category ${template.category}`,
+  );
+  assert(
+    !forbiddenTimingNames.test(template.name),
+    `${template.id} has time-specific name ${template.name}`,
+  );
 }
 
-for (const option of mediaOpportunityTemplates.flatMap((template) => template.responseOptions)) {
-  assert(!campaignActionTemplates.some((template) => template.id === option.id), `${option.id} media response leaked into campaign actions`);
+for (const option of mediaOpportunityTemplates.flatMap(
+  (template) => template.responseOptions,
+)) {
+  assert(
+    !campaignActionTemplates.some((template) => template.id === option.id),
+    `${option.id} media response leaked into campaign actions`,
+  );
 }
 
 for (const action of analyticsActionTemplates) {
-  assert(action.placement === 'analytics', `${action.id} must have analytics placement`);
+  assert(
+    action.placement === "analytics",
+    `${action.id} must have analytics placement`,
+  );
 }
 
 for (const action of eventResponseTemplates) {
-  assert(action.placement === 'event_response', `${action.id} must have event_response placement`);
+  assert(
+    action.placement === "event_response",
+    `${action.id} must have event_response placement`,
+  );
   assert(action.requiresActiveEvent, `${action.id} must require active event`);
 }
 
@@ -75,94 +130,254 @@ const ids = new Set<string>();
 for (const action of campaignActionsV2) {
   assert(!ids.has(action.id), `Duplicate action id ${action.id}`);
   ids.add(action.id);
-  assert(validCategories.has(action.category), `Invalid category for ${action.id}`);
-  assert(validLegalities.has(action.legality), `Invalid legality for ${action.id}`);
-  assert(action.ethicalRisk >= 0 && action.ethicalRisk <= 1, `ethicalRisk out of range for ${action.id}`);
+  assert(
+    validCategories.has(action.category),
+    `Invalid category for ${action.id}`,
+  );
+  assert(
+    validLegalities.has(action.legality),
+    `Invalid legality for ${action.id}`,
+  );
+  assert(
+    action.ethicalRisk >= 0 && action.ethicalRisk <= 1,
+    `ethicalRisk out of range for ${action.id}`,
+  );
   assert(action.cost >= 0, `cost must be non-negative for ${action.id}`);
-  assert(action.staffCost >= 0, `staffCost must be non-negative for ${action.id}`);
-  assert(action.leaderTimeCost >= 0, `leaderTimeCost must be non-negative for ${action.id}`);
-  assert(action.fatigueCost >= 0, `fatigueCost must be non-negative for ${action.id}`);
+  assert(
+    action.staffCost >= 0,
+    `staffCost must be non-negative for ${action.id}`,
+  );
+  assert(
+    action.leaderTimeCost >= 0,
+    `leaderTimeCost must be non-negative for ${action.id}`,
+  );
+  assert(
+    action.fatigueCost >= 0,
+    `fatigueCost must be non-negative for ${action.id}`,
+  );
+  const sourceTemplate = campaignActionTemplates.find(
+    (template) => template.id === action.id,
+  );
+
+  assert(sourceTemplate, `Missing source template for ${action.id}`);
+
+  assert(
+    JSON.stringify(action.tags) === JSON.stringify(sourceTemplate.tags),
+    `Semantic tags were not preserved for ${action.id}`,
+  );
+
+  assert(
+    action.tags !== sourceTemplate.tags,
+    `Semantic tags must be copied for ${action.id}`,
+  );
   for (const [riskKey, value] of Object.entries(action.risks)) {
-    assert(value >= 0 && value <= 1, `${action.id}.${riskKey} risk out of range`);
+    assert(
+      value >= 0 && value <= 1,
+      `${action.id}.${riskKey} risk out of range`,
+    );
   }
 }
 
-assert(getCampaignPhase(1, 21) === 'early', 'week 1 should be early campaign');
-assert(getCampaignPhase(20, 21) === 'final', 'penultimate week should be final campaign');
-assert(getCampaignPhase(21, 21) === 'election_day', 'final week should be election day');
-assert(getCampaignTimingMultipliers('gotvOperation', 20, 21).turnout > getCampaignTimingMultipliers('gotvOperation', 3, 21).turnout, 'GOTV should be stronger late');
-assert(getCampaignTimingMultipliers('fabricatedScandal', 20, 21).risk > getCampaignTimingMultipliers('fabricatedScandal', 3, 21).risk, 'fabricated scandal should be riskier late');
+assert(getCampaignPhase(1, 21) === "early", "week 1 should be early campaign");
+assert(
+  getCampaignPhase(20, 21) === "final",
+  "penultimate week should be final campaign",
+);
+assert(
+  getCampaignPhase(21, 21) === "election_day",
+  "final week should be election day",
+);
+assert(
+  getCampaignTimingMultipliers("gotvOperation", 20, 21).turnout >
+    getCampaignTimingMultipliers("gotvOperation", 3, 21).turnout,
+  "GOTV should be stronger late",
+);
+assert(
+  getCampaignTimingMultipliers("fabricatedScandal", 20, 21).risk >
+    getCampaignTimingMultipliers("fabricatedScandal", 3, 21).risk,
+  "fabricated scandal should be riskier late",
+);
 
 const baseState = initializeComputedState(createInitialGameState());
 
 const cleanState = cloneState(baseState);
-const cleanBeforeOrganization = cleanState.partyRuntime.player.organization.ustecky ?? 0;
-const cleanBeforeAuthenticity = cleanState.partyRuntime.player.reputation.authenticity;
-const cleanResult = applyCampaignActionV2(cleanState, planned('regionalMeeting', { targetRegionId: 'ustecky' }));
-assert(cleanResult.ok, 'Clean regionalMeeting should apply');
-assert((cleanState.partyRuntime.player.organization.ustecky ?? 0) > cleanBeforeOrganization, 'Clean action should increase regional organization');
-assert(cleanState.partyRuntime.player.reputation.authenticity > cleanBeforeAuthenticity, 'Clean action should improve authenticity');
-assert((cleanState.partyRuntime.player.legalExposure ?? 0) === 0, 'Clean action should not create illegal legal exposure');
+const cleanBeforeOrganization =
+  cleanState.partyRuntime.player.organization.ustecky ?? 0;
+const cleanBeforeAuthenticity =
+  cleanState.partyRuntime.player.reputation.authenticity;
+const cleanResult = applyCampaignActionV2(
+  cleanState,
+  planned("regionalMeeting", { targetRegionId: "ustecky" }),
+);
+assert(cleanResult.ok, "Clean regionalMeeting should apply");
+assert(
+  (cleanState.partyRuntime.player.organization.ustecky ?? 0) >
+    cleanBeforeOrganization,
+  "Clean action should increase regional organization",
+);
+assert(
+  cleanState.partyRuntime.player.reputation.authenticity >
+    cleanBeforeAuthenticity,
+  "Clean action should improve authenticity",
+);
+assert(
+  (cleanState.partyRuntime.player.legalExposure ?? 0) === 0,
+  "Clean action should not create illegal legal exposure",
+);
 
 const digitalState = cloneState(baseState);
-const digitalBeforeSupport = computeNationalSupport(digitalState, computeRegionalSupport(digitalState)).player;
-const digitalResult = applyCampaignActionV2(digitalState, planned('onlineAdCampaign'));
-assert(digitalResult.ok, 'Digital campaign action should apply');
-const digitalAfterSupport = computeNationalSupport(digitalState, computeRegionalSupport(digitalState)).player;
-assert(digitalAfterSupport >= digitalBeforeSupport, 'Digital campaign action should not reduce direct support estimate');
+const digitalBeforeSupport = computeNationalSupport(
+  digitalState,
+  computeRegionalSupport(digitalState),
+).player;
+const digitalResult = applyCampaignActionV2(
+  digitalState,
+  planned("onlineAdCampaign"),
+);
+assert(digitalResult.ok, "Digital campaign action should apply");
+const digitalAfterSupport = computeNationalSupport(
+  digitalState,
+  computeRegionalSupport(digitalState),
+).player;
+assert(
+  digitalAfterSupport >= digitalBeforeSupport,
+  "Digital campaign action should not reduce direct support estimate",
+);
 
 const gotvState = cloneState(baseState);
 gotvState.week = gotvState.rules.finalWeek - 1;
-const gotvResult = applyCampaignActionV2(gotvState, planned('gotvOperation'));
-assert(gotvResult.ok, 'GOTV operation should apply');
-assert((gotvState.turnoutModifiers ?? []).some((modifier) => modifier.kind === 'turnout'), 'GOTV should be stored as turnout preparation');
+const gotvResult = applyCampaignActionV2(gotvState, planned("gotvOperation"));
+assert(gotvResult.ok, "GOTV operation should apply");
+assert(
+  (gotvState.turnoutModifiers ?? []).some(
+    (modifier) => modifier.kind === "turnout",
+  ),
+  "GOTV should be stored as turnout preparation",
+);
 
 const grayState = cloneState(baseState);
 const grayBeforeRisk = grayState.partyRuntime.player.scandalRisk;
-const grayResult = applyCampaignActionV2(grayState, planned('demobilizingNegativeCampaign'));
-assert(grayResult.ok, 'Gray action should apply');
-assert(grayState.partyRuntime.player.scandalRisk > grayBeforeRisk, 'Gray action should increase scandal risk');
-assert(grayState.partyRuntime.player.reputation.integrity < baseState.partyRuntime.player.reputation.integrity, 'Gray action should damage integrity');
-assert((grayState.turnoutModifiers ?? []).some((modifier) => modifier.kind === 'demobilization'), 'Gray demobilization should be stored as turnout preparation');
+const grayResult = applyCampaignActionV2(
+  grayState,
+  planned("demobilizingNegativeCampaign"),
+);
+assert(grayResult.ok, "Gray action should apply");
+assert(
+  grayState.partyRuntime.player.scandalRisk > grayBeforeRisk,
+  "Gray action should increase scandal risk",
+);
+assert(
+  grayState.partyRuntime.player.reputation.integrity <
+    baseState.partyRuntime.player.reputation.integrity,
+  "Gray action should damage integrity",
+);
+assert(
+  (grayState.turnoutModifiers ?? []).some(
+    (modifier) => modifier.kind === "demobilization",
+  ),
+  "Gray demobilization should be stored as turnout preparation",
+);
 
-const blackOps = campaignActionsV2.filter((action) => action.category === 'blackOps');
-assert(blackOps.length >= 3, 'Expected at least three blackOps abstractions');
+const blackOps = campaignActionsV2.filter(
+  (action) => action.category === "blackOps",
+);
+assert(blackOps.length >= 3, "Expected at least three blackOps abstractions");
 for (const action of blackOps) {
-  assert(action.legality === 'illegal', `${action.id} must be illegal`);
+  assert(action.legality === "illegal", `${action.id} must be illegal`);
   assert(action.risks.legal >= 0.8, `${action.id} must have high legal risk`);
-  assert(action.risks.scandal >= 0.75, `${action.id} must have high scandal risk`);
+  assert(
+    action.risks.scandal >= 0.75,
+    `${action.id} must have high scandal risk`,
+  );
   assert(action.risks.media >= 0.7, `${action.id} must have high media risk`);
-  assert((action.effects.reputationShift?.integrity ?? 0) < 0 || (action.effects.scandalRiskShift ?? 0) > 0.15, `${action.id} must damage integrity or raise scandal risk`);
-  assert(!/how to|step by step|evade|harass|suppress voters|target real voters|scrape|botnet|phish/i.test(action.description), `${action.id} contains operational wording`);
+  assert(
+    (action.effects.reputationShift?.integrity ?? 0) < 0 ||
+      (action.effects.scandalRiskShift ?? 0) > 0.15,
+    `${action.id} must damage integrity or raise scandal risk`,
+  );
+  assert(
+    !/how to|step by step|evade|harass|suppress voters|target real voters|scrape|botnet|phish/i.test(
+      action.description,
+    ),
+    `${action.id} contains operational wording`,
+  );
 }
 
 const blackState = cloneState(baseState);
-const blackBeforeIntegrity = blackState.partyRuntime.player.reputation.integrity;
-const blackResult = applyCampaignActionV2(blackState, planned('fabricatedScandal'));
-assert(blackResult.ok, 'BlackOps action should apply as a high-risk abstract mechanic');
-assert(blackState.partyRuntime.player.reputation.integrity < blackBeforeIntegrity, 'BlackOps action should damage integrity');
-assert((blackState.partyRuntime.player.legalExposure ?? 0) > 0.15, 'BlackOps action should raise legal exposure');
-assert(blackState.scandals.some((scandal) => scandal.sourcePartyId === 'player'), 'BlackOps action should create detection/scandal exposure');
+const blackBeforeIntegrity =
+  blackState.partyRuntime.player.reputation.integrity;
+const blackResult = applyCampaignActionV2(
+  blackState,
+  planned("fabricatedScandal"),
+);
+assert(
+  blackResult.ok,
+  "BlackOps action should apply as a high-risk abstract mechanic",
+);
+assert(
+  blackState.partyRuntime.player.reputation.integrity < blackBeforeIntegrity,
+  "BlackOps action should damage integrity",
+);
+assert(
+  (blackState.partyRuntime.player.legalExposure ?? 0) > 0.15,
+  "BlackOps action should raise legal exposure",
+);
+assert(
+  blackState.scandals.some((scandal) => scandal.sourcePartyId === "player"),
+  "BlackOps action should create detection/scandal exposure",
+);
 
-for (const state of [cleanState, digitalState, gotvState, grayState, blackState]) {
+for (const state of [
+  cleanState,
+  digitalState,
+  gotvState,
+  grayState,
+  blackState,
+]) {
   const runtime = state.partyRuntime.player;
-  assert(runtime.cash >= 0, 'cash should remain clamped above zero');
-  assert(runtime.leader.fatigue >= 0 && runtime.leader.fatigue <= 1, 'fatigue should remain clamped');
-  assert(runtime.reputation.integrity >= 0 && runtime.reputation.integrity <= 1, 'integrity should remain clamped');
-  assert(runtime.scandalRisk >= 0 && runtime.scandalRisk <= 1, 'scandalRisk should remain clamped');
+  assert(runtime.cash >= 0, "cash should remain clamped above zero");
+  assert(
+    runtime.leader.fatigue >= 0 && runtime.leader.fatigue <= 1,
+    "fatigue should remain clamped",
+  );
+  assert(
+    runtime.reputation.integrity >= 0 && runtime.reputation.integrity <= 1,
+    "integrity should remain clamped",
+  );
+  assert(
+    runtime.scandalRisk >= 0 && runtime.scandalRisk <= 1,
+    "scandalRisk should remain clamped",
+  );
 }
 
 const turn = resolveTurn(baseState, [
-  planned('regionalMeeting', { targetRegionId: 'ustecky' }),
-  planned('onlineAdCampaign'),
-  planned('anonymousSupportPages'),
+  planned("regionalMeeting", { targetRegionId: "ustecky" }),
+  planned("onlineAdCampaign"),
+  planned("anonymousSupportPages"),
 ]);
 for (const partyId of partyIds) {
-  assert(Number.isFinite(turn.state.nationalSupport[partyId]), `National support for ${partyId} must be finite`);
-  assert(turn.state.nationalSupport[partyId] >= 0, `National support for ${partyId} must be non-negative`);
+  assert(
+    Number.isFinite(turn.state.nationalSupport[partyId]),
+    `National support for ${partyId} must be finite`,
+  );
+  assert(
+    turn.state.nationalSupport[partyId] >= 0,
+    `National support for ${partyId} must be non-negative`,
+  );
 }
-const supportTotal = partyIds.reduce((sum, partyId) => sum + turn.state.nationalSupport[partyId], 0);
-assert(Math.abs(supportTotal - 1) < 0.000001, `National support must sum to 1, got ${supportTotal}`);
-assert(turn.briefing.actionEffects.some((note) => note.includes('Regionalni meeting')), 'Briefing should include CampaignActionV2 action note');
+const supportTotal = partyIds.reduce(
+  (sum, partyId) => sum + turn.state.nationalSupport[partyId],
+  0,
+);
+assert(
+  Math.abs(supportTotal - 1) < 0.000001,
+  `National support must sum to 1, got ${supportTotal}`,
+);
+assert(
+  turn.briefing.actionEffects.some((note) =>
+    note.includes("Regionalni meeting"),
+  ),
+  "Briefing should include CampaignActionV2 action note",
+);
 
-console.log('Campaign Actions v2 tests passed');
+console.log("Campaign Actions v2 tests passed");

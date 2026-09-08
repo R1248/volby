@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadVoterFieldV03 = loadVoterFieldV03;
 exports.loadRegionalizedVoterFieldV03 = loadRegionalizedVoterFieldV03;
 exports.loadClusteredRegionalizedVoterFieldV03 = loadClusteredRegionalizedVoterFieldV03;
+exports.loadClusteredRegionalizedVoterFieldV04 = loadClusteredRegionalizedVoterFieldV04;
+exports.loadClusteredRegionalizedVoterField = loadClusteredRegionalizedVoterField;
 exports.decodeCompactVoterField = decodeCompactVoterField;
 exports.decodeRegionalizedVoterField = decodeRegionalizedVoterField;
 exports.inferSegmentLabel = inferSegmentLabel;
@@ -18,6 +20,7 @@ const regionalEnrichment_1 = require("./regionalEnrichment");
 const compactData = voterField_v03_json_1.default;
 const clusteredRegionalCompactData = voterField_v03_regionalized_clustered_json_1.default;
 const regionalCompactData = voterField_v03_regionalized_json_1.default;
+let calibratedV04CompactData;
 function loadVoterFieldV03() {
     return decodeCompactVoterField(compactData);
 }
@@ -26,6 +29,16 @@ function loadRegionalizedVoterFieldV03() {
 }
 function loadClusteredRegionalizedVoterFieldV03() {
     return decodeRegionalizedVoterField(clusteredRegionalCompactData);
+}
+function loadClusteredRegionalizedVoterFieldV04() {
+    if (!calibratedV04CompactData) {
+        // Lazy require keeps TypeScript checks green before the offline materialization script creates this JSON.
+        calibratedV04CompactData = require('./voterField.calibrated.v04.json');
+    }
+    return decodeRegionalizedVoterField(calibratedV04CompactData);
+}
+function loadClusteredRegionalizedVoterField(version) {
+    return version === 'v04' ? loadClusteredRegionalizedVoterFieldV04() : loadClusteredRegionalizedVoterFieldV03();
 }
 function decodeCompactVoterField(data) {
     const points = (0, greenDealIssue_1.enrichGreenDealIssuePreferences)(data.points.map((row, index) => decodePoint(data, row, index)));

@@ -15,24 +15,24 @@ Object.defineProperty(exports, "peopleOpsTemplates", { enumerable: true, get: fu
 const programMandateCatalog_1 = require("./programMandateCatalog");
 Object.defineProperty(exports, "programMandateTemplates", { enumerable: true, get: function () { return programMandateCatalog_1.programMandateTemplates; } });
 const categoryMap = {
-    ads: 'ads',
-    allies: 'ally',
-    blackOps: 'blackOps',
-    digital: 'digital',
-    field: 'field',
-    grayZone: 'grayZone',
-    mobilization: 'turnout',
-    negative: 'negative',
+    ads: "ads",
+    allies: "ally",
+    blackOps: "blackOps",
+    digital: "digital",
+    field: "field",
+    grayZone: "grayZone",
+    mobilization: "turnout",
+    negative: "negative",
 };
 const targetMap = {
-    allyEcosystem: 'national',
-    coalitionPartner: 'opponent',
-    issue: 'issue',
-    leader: 'leader',
-    national: 'national',
-    opponent: 'opponent',
-    region: 'region',
-    segment: 'segment',
+    allyEcosystem: "national",
+    coalitionPartner: "opponent",
+    issue: "issue",
+    leader: "leader",
+    national: "national",
+    opponent: "opponent",
+    region: "region",
+    segment: "segment",
 };
 exports.campaignActionsV2 = campaignActionCatalog_1.campaignActionTemplates.map(toCampaignActionV2);
 function campaignActionV2ById(actionId) {
@@ -50,6 +50,7 @@ function toCampaignActionV2(template) {
         availability: template.availability,
         legality: template.legality,
         ethicalRisk: template.ethicalRisk,
+        tags: [...template.tags],
         cost: round(template.cost.money),
         staffCost: round((template.cost.centralStaffHours + template.cost.regionalStaffHours) / 40),
         leaderTimeCost: round(template.cost.leaderHours / 40),
@@ -71,21 +72,21 @@ function toCampaignActionV2(template) {
     };
 }
 function mapCategory(template) {
-    if (template.legality === 'illegal') {
-        return 'blackOps';
+    if (template.legality === "illegal") {
+        return "blackOps";
     }
-    if (template.legality === 'gray' || template.tags.includes('grayZone')) {
-        return 'grayZone';
+    if (template.legality === "gray" || template.tags.includes("grayZone")) {
+        return "grayZone";
     }
-    return categoryMap[template.category] ?? 'field';
+    return categoryMap[template.category] ?? "field";
 }
 function pickTargetScope(template) {
     const required = template.requiredTargets[0];
     if (required) {
         return targetMap[required];
     }
-    const preferred = ['national', 'opponent', 'issue', 'region', 'segment'].find((target) => template.allowedTargets.includes(target));
-    return preferred ? targetMap[preferred] : 'national';
+    const preferred = ["national", "opponent", "issue", "region", "segment"].find((target) => template.allowedTargets.includes(target));
+    return preferred ? targetMap[preferred] : "national";
 }
 function mapEffects(template, risks, targetScope) {
     const base = template.effects;
@@ -108,10 +109,10 @@ function mapEffects(template, risks, targetScope) {
     effects.informationQualityShift = infoQualityShift(base);
     effects.regionOrganizationShift = sumRecord(base.organization);
     effects.coalitionRelationShift = sumRecord(base.coalition);
-    if (turnout !== 0 && template.tags.includes('demobilization')) {
+    if (turnout !== 0 && template.tags.includes("demobilization")) {
         effects.demobilizationModifier = {
             amount: -Math.abs(clamp(turnout, -0.08, 0.08)),
-            scope: targetScope === 'national' ? 'opponent' : targetScope,
+            scope: targetScope === "national" ? "opponent" : targetScope,
         };
     }
     else if (turnout !== 0) {
@@ -123,7 +124,7 @@ function mapEffects(template, risks, targetScope) {
     if (demobilization !== 0) {
         effects.demobilizationModifier = {
             amount: -Math.abs(clamp(demobilization, -0.08, 0.08)),
-            scope: targetScope === 'national' ? 'opponent' : targetScope,
+            scope: targetScope === "national" ? "opponent" : targetScope,
         };
     }
     if (risks.counterMobilization > 0.14) {
@@ -133,18 +134,26 @@ function mapEffects(template, risks, targetScope) {
         effects.mediaVulnerabilityShift = round(risks.media * 0.04);
     }
     if (risks.scandal > 0.08) {
-        effects.scandalRiskShift = round(risks.scandal * (template.legality === 'illegal' ? 0.16 : 0.08));
+        effects.scandalRiskShift = round(risks.scandal * (template.legality === "illegal" ? 0.16 : 0.08));
     }
     if (risks.legal > 0.08) {
-        effects.legalExposureShift = round(risks.legal * (template.legality === 'illegal' ? 0.18 : 0.08));
+        effects.legalExposureShift = round(risks.legal * (template.legality === "illegal" ? 0.18 : 0.08));
     }
     return removeEmptyEffects(effects);
 }
 function mapRisks(template) {
     const risks = template.risks;
-    const legalBase = template.legality === 'illegal' ? 0.82 : template.legality === 'gray' ? 0.08 : 0;
-    const scandalBase = template.legality === 'illegal' ? 0.78 : template.legality === 'gray' ? 0.12 : 0;
-    const mediaBase = template.legality === 'illegal' ? 0.72 : 0;
+    const legalBase = template.legality === "illegal"
+        ? 0.82
+        : template.legality === "gray"
+            ? 0.08
+            : 0;
+    const scandalBase = template.legality === "illegal"
+        ? 0.78
+        : template.legality === "gray"
+            ? 0.12
+            : 0;
+    const mediaBase = template.legality === "illegal" ? 0.72 : 0;
     return {
         backlash: clamp(Math.max(risks.mediaBacklash, risks.longTermTrust * 0.8, risks.counterMobilization * 0.55), 0, 1),
         legal: clamp(Math.max(risks.legal, legalBase), 0, 1),
@@ -156,20 +165,33 @@ function mapRisks(template) {
     };
 }
 function infoQualityShift(base) {
-    const total = (base.informationQuality ?? 0) + (base.predictionAccuracy ?? 0) * 0.5 + (base.riskDetection ?? 0) * 0.4;
+    const total = (base.informationQuality ?? 0) +
+        (base.predictionAccuracy ?? 0) * 0.5 +
+        (base.riskDetection ?? 0) * 0.4;
     return total === 0 ? undefined : round(total);
 }
 function scaleRecord(record, multiplier) {
     if (!record) {
         return undefined;
     }
-    return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, round(value * multiplier)]));
+    return Object.fromEntries(Object.entries(record).map(([key, value]) => [
+        key,
+        round(value * multiplier),
+    ]));
 }
 function filterLatent(record) {
     if (!record) {
         return undefined;
     }
-    const dimensions = new Set(['authority', 'culture', 'econ', 'establishment', 'globalism', 'green', 'ukraine']);
+    const dimensions = new Set([
+        "authority",
+        "culture",
+        "econ",
+        "establishment",
+        "globalism",
+        "green",
+        "ukraine",
+    ]);
     return Object.fromEntries(Object.entries(record)
         .filter(([key]) => dimensions.has(key))
         .map(([key, value]) => [key, round(value)]));
@@ -178,17 +200,24 @@ function filterReputation(record) {
     if (!record) {
         return undefined;
     }
-    const keys = new Set(['authenticity', 'competence', 'consistency', 'controversy', 'integrity', 'trust']);
+    const keys = new Set([
+        "authenticity",
+        "competence",
+        "consistency",
+        "controversy",
+        "integrity",
+        "trust",
+    ]);
     return Object.fromEntries(Object.entries(record).filter(([key]) => keys.has(key)));
 }
 function defaultReputationShift(template) {
-    if (template.legality === 'illegal') {
+    if (template.legality === "illegal") {
         return { controversy: 0.06, integrity: -0.09, trust: -0.04 };
     }
-    if (template.legality === 'gray') {
+    if (template.legality === "gray") {
         return { controversy: 0.025, integrity: -0.035, trust: -0.015 };
     }
-    if (template.category === 'field') {
+    if (template.category === "field") {
         return { authenticity: 0.006 };
     }
     return {};
@@ -204,43 +233,47 @@ function removeEmptyEffects(effects) {
     return Object.fromEntries(Object.entries(effects).filter(([, value]) => {
         if (value === undefined)
             return false;
-        if (typeof value === 'number')
+        if (typeof value === "number")
             return value !== 0;
-        if (typeof value === 'object')
+        if (typeof value === "object")
             return Object.keys(value).length > 0;
         return true;
     }));
 }
 function precisionFor(template) {
-    if (template.legality !== 'clean')
-        return 'seniorAdvisor';
-    if (template.tags.includes('personal_contact') || template.tags.includes('mobilization'))
-        return 'none';
-    if (template.tags.includes('advertising') || template.tags.includes('digital'))
-        return 'poll';
-    return 'focusGroup';
+    if (template.legality !== "clean")
+        return "seniorAdvisor";
+    if (template.tags.includes("personal_contact") ||
+        template.tags.includes("mobilization"))
+        return "none";
+    if (template.tags.includes("advertising") ||
+        template.tags.includes("digital"))
+        return "poll";
+    return "focusGroup";
 }
 function shortEffectLabel(template) {
     const effects = [
-        template.effects.awareness ? 'viditelnost' : undefined,
-        template.effects.persuasion ? 'presvedcovani' : undefined,
-        template.effects.turnout ? 'mobilizace' : undefined,
-        template.effects.demobilization ? 'demobilizace' : undefined,
-        template.effects.organization ? 'organizace' : undefined,
-        template.effects.reputation ? 'reputace' : undefined,
-        template.effects.issueSalience || template.effects.issuePosition ? 'temata' : undefined,
+        template.effects.awareness ? "viditelnost" : undefined,
+        template.effects.persuasion ? "presvedcovani" : undefined,
+        template.effects.turnout ? "mobilizace" : undefined,
+        template.effects.demobilization ? "demobilizace" : undefined,
+        template.effects.organization ? "organizace" : undefined,
+        template.effects.reputation ? "reputace" : undefined,
+        template.effects.issueSalience || template.effects.issuePosition
+            ? "temata"
+            : undefined,
     ].filter(Boolean);
-    return effects.length > 0 ? effects.join(', ') : 'strukturovany dopad';
+    return effects.length > 0 ? effects.join(", ") : "strukturovany dopad";
 }
 function riskLabel(legality, risks) {
     const maxRisk = Math.max(...Object.values(risks));
-    if (legality === 'illegal' || maxRisk >= 0.7)
-        return 'Extremni riziko';
-    if (legality === 'gray' || maxRisk >= 0.3)
-        return 'Vysoke riziko';
+    if (legality === "illegal" || maxRisk >= 0.7)
+        return "Extremni riziko";
+    if (legality === "gray" || maxRisk >= 0.3)
+        return "Vysoke riziko";
     if (maxRisk >= 0.12)
-        return 'Stredni riziko';
-    return 'Nizke riziko';
+        return "Stredni riziko";
+    return "Nizke riziko";
 }
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));

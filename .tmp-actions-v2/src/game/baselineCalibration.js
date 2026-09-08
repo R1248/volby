@@ -1,7 +1,19 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.calibratePartyAmplitudesToTargets = calibratePartyAmplitudesToTargets;
+exports.getNationalAmplitudeCalibrationRunCount = getNationalAmplitudeCalibrationRunCount;
+exports.resetNationalAmplitudeCalibrationRunCount = resetNationalAmplitudeCalibrationRunCount;
+exports.getBaselineCalibrationV04 = getBaselineCalibrationV04;
+exports.applyPrecalibratedBaselineV04 = applyPrecalibratedBaselineV04;
+exports.applyBaselineCalibrationArtifact = applyBaselineCalibrationArtifact;
+exports.partyRegionalPriorUtilityModifier = partyRegionalPriorUtilityModifier;
+const baselineCalibration_v04_json_1 = __importDefault(require("./calibration/baselineCalibration.v04.json"));
+let nationalAmplitudeCalibrationRunCount = 0;
 function calibratePartyAmplitudesToTargets(state, targets, options = {}) {
+    nationalAmplitudeCalibrationRunCount += 1;
     if (!options.supportResolver) {
         throw new Error('calibratePartyAmplitudesToTargets requires a supportResolver');
     }
@@ -30,6 +42,41 @@ function calibratePartyAmplitudesToTargets(state, targets, options = {}) {
         }
     }
     return nextState;
+}
+function getNationalAmplitudeCalibrationRunCount() {
+    return nationalAmplitudeCalibrationRunCount;
+}
+function resetNationalAmplitudeCalibrationRunCount() {
+    nationalAmplitudeCalibrationRunCount = 0;
+}
+function getBaselineCalibrationV04() {
+    return baselineCalibration_v04_json_1.default;
+}
+function applyPrecalibratedBaselineV04(state) {
+    return applyBaselineCalibrationArtifact(state, getBaselineCalibrationV04(), {
+        partyRegionalPriorStrength: 1,
+    });
+}
+function applyBaselineCalibrationArtifact(state, artifact, options = {}) {
+    const nextState = cloneState(state);
+    for (const [partyId, amplitude] of Object.entries(artifact.final.partyAmplitude)) {
+        const runtime = nextState.partyRuntime[partyId];
+        if (!runtime || !Number.isFinite(amplitude) || amplitude <= 0) {
+            continue;
+        }
+        runtime.field.amplitude = amplitude;
+    }
+    nextState.baselineCalibrated = true;
+    nextState.baselineMode = 'precalibrated-v04';
+    nextState.partyRegionalPrior = artifact.final.partyRegionalPrior;
+    nextState.partyRegionalPriorStrength = options.partyRegionalPriorStrength ?? 0;
+    return nextState;
+}
+function partyRegionalPriorUtilityModifier(partyId, regionId, prior, strength = 0) {
+    if (!prior || strength <= 0) {
+        return 0;
+    }
+    return (prior[partyId]?.[regionId] ?? 0) * strength;
 }
 function normalizeTargets(targets) {
     const entries = Object.entries(targets).filter(([, value]) => Number.isFinite(value) && (value ?? 0) > 0);

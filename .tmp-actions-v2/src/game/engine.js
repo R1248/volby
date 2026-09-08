@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeComputedState = initializeComputedState;
-exports.generateWeeklyContext = generateWeeklyContext;
+exports.prepareWeek = prepareWeek;
 exports.resolveTurn = resolveTurn;
+exports.resolvePreparedWeek = resolvePreparedWeek;
 exports.previewActionImpact = previewActionImpact;
 exports.computeRegionalSupport = computeRegionalSupport;
 exports.computeNationalSupport = computeNationalSupport;
@@ -28,6 +29,7 @@ const seed_1 = require("./seed");
 const regionalAggregation_1 = require("../simulation/engine/regionalAggregation");
 const actionEngine_1 = require("./actionEngine");
 const baselineCalibration_1 = require("./baselineCalibration");
+const regionalBaselineBias_1 = require("./calibration/regionalBaselineBias");
 const issueSeed_1 = require("./issueSeed");
 const mediaEngine_1 = require("./mediaEngine");
 const mediaOutlets_1 = require("../data/mediaOutlets");
@@ -47,8 +49,14 @@ function initializeComputedState(state) {
     let nextState = cloneState(state);
     ensureIssueLayer(nextState);
     nextState.issueLayer = (0, issueEngine_1.recalculateIssueLayer)(nextState.issueLayer, nextState.partyRuntime.player.field.flexibility);
-    const initialBaselineOptions = nextState.baselineCalibrated === false ? { disableProgramModifier: true } : undefined;
-    if (nextState.baselineCalibrated === false) {
+    const baselineMode = nextState.baselineMode ?? seed_1.DEFAULT_BASELINE_MODE;
+    const initialBaselineOptions = baselineMode === 'precalibrated-v04' || nextState.baselineCalibrated === false
+        ? { disableProgramModifier: true }
+        : undefined;
+    if (baselineMode === 'precalibrated-v04') {
+        nextState = (0, baselineCalibration_1.applyPrecalibratedBaselineV04)(nextState);
+    }
+    if (baselineMode === 'legacy-fit-national' && nextState.baselineCalibrated === false) {
         nextState = (0, baselineCalibration_1.calibratePartyAmplitudesToTargets)(nextState, seed_1.baselineTargetShares, {
             disablePlayerProgramModifier: true,
             supportResolver: resolveSupportForCalibration,
@@ -68,7 +76,7 @@ function resolveSupportForCalibration(state, options) {
         regionalSupport,
     };
 }
-function generateWeeklyContext(state, rngSeed = state.rngSeed) {
+function generateWeeklyContext(state, rngSeed) {
     let nextState = cloneState(state);
     const generatedWeeklyMedia = (0, mediaEngine_1.generateWeeklyMediaInvitations)(nextState, rngSeed);
     if (generatedWeeklyMedia.length > 0) {
@@ -101,19 +109,56 @@ function generateWeeklyContext(state, rngSeed = state.rngSeed) {
     }
     return { contextNotes, events: generatedEvents, invitations: generatedInvitations, state: nextState };
 }
-function resolveTurn(state, plannedActions, rngSeed = state.rngSeed) {
+/** Preparation owns all weekly generation. Missing metadata also covers legacy saves. */
+function prepareWeek(state, rngSeed = state.preparedWeek?.rngSeed ?? state.rngSeed) {
+    if (state.preparedWeek) {
+        requirePreparedWeek(state);
+        if (state.preparedWeek.rngSeed !== rngSeed) {
+            throw new Error('Cannot change the seed of a prepared week.');
+        }
+        return state;
+    }
+    const baseState = hasComputedSupport(state) ? state : initializeComputedState(state);
+    const context = generateWeeklyContext(baseState, rngSeed);
+    context.state.preparedWeek = {
+        week: state.week,
+        rngSeed,
+        contextNotes: context.contextNotes,
+        eventIds: context.events.map((event) => event.id),
+        invitationIds: context.invitations.map((invitation) => invitation.id),
+    };
+    return context.state;
+}
+function requirePreparedWeek(state) {
+    const prepared = state.preparedWeek;
+    if (!prepared || prepared.week !== state.week) {
+        throw new Error('Current week must be prepared before resolution.');
+    }
+    if (prepared.eventIds.some((id) => !state.events.some((event) => event.id === id && event.week === state.week)) ||
+        prepared.invitationIds.some((id) => !state.mediaInvitations.some((invitation) => invitation.id === id && invitation.week === state.week))) {
+        throw new Error('Prepared week references missing context.');
+    }
+    return prepared;
+}
+/** Compatibility entry point for engine scripts; interactive callers use the explicit lifecycle. */
+function resolveTurn(state, plannedActions, rngSeed = state.preparedWeek?.rngSeed ?? state.rngSeed) {
+    return resolvePreparedWeek(prepareWeek(state, rngSeed), plannedActions);
+}
+function resolvePreparedWeek(state, plannedActions) {
+    const prepared = requirePreparedWeek(state);
+    const rngSeed = prepared.rngSeed;
     const beforeState = hasComputedSupport(state) ? cloneState(state) : initializeComputedState(state);
     const nextState = cloneState(beforeState);
-    const context = generateWeeklyContext(nextState, rngSeed);
+    const context = {
+        contextNotes: prepared.contextNotes,
+        events: prepared.eventIds.map((id) => nextState.events.find((event) => event.id === id)),
+    };
     const actionEffects = [];
     const mediaNotes = [];
     const opponentMoves = [];
     const riskNotes = [];
-    nextState.events = context.state.events;
-    nextState.mediaInvitations = context.state.mediaInvitations;
-    nextState.scandals = context.state.scandals;
     applyMarketingAdvisorCost(nextState, riskNotes);
-    applyMediaInvitations(nextState, mediaNotes, riskNotes);
+    applyMediaInvitations(nextState, mediaNotes, riskNotes, prepared.invitationIds);
     applyPendingMediaEffects(nextState, mediaNotes, riskNotes);
     for (const plannedAction of plannedActions) {
         applyAction(nextState, plannedAction, actionEffects, riskNotes);
@@ -126,10 +171,7 @@ function resolveTurn(state, plannedActions, rngSeed = state.rngSeed) {
     nextState.week = Math.min(nextState.rules.finalWeek, beforeState.week + 1);
     nextState.rngSeed = nextSeed(rngSeed);
     resetLeaderWeek(nextState);
-    const nextWeekInvitations = (0, mediaEngine_1.generateWeeklyMediaInvitations)(nextState, nextState.rngSeed);
-    if (nextWeekInvitations.length > 0) {
-        nextState.mediaInvitations = receiveMediaInvitations(nextState, nextWeekInvitations).mediaInvitations;
-    }
+    delete nextState.preparedWeek;
     nextState.regionalSupport = computeRegionalSupport(nextState);
     nextState.nationalSupport = computeNationalSupport(nextState, nextState.regionalSupport);
     nextState.polls = computePolls(nextState, nextState.nationalSupport).partySupportEstimate ?? nextState.polls;
@@ -168,7 +210,7 @@ function computeRegionalSupportFull(state, options = {}) {
 }
 function computeNationalSupport(state, regionalSupport = state.regionalSupport) {
     const weighted = Object.fromEntries(seed_1.partyIds.map((partyId) => [partyId, 0]));
-    const regionalWeights = getRegionalVoterWeightByRegionId();
+    const regionalWeights = getRegionalVoterWeightByRegionId(state.baselineMode);
     const totalPopulation = state.regions.reduce((sum, region) => sum + (regionalWeights[region.id] ?? region.populationWeight), 0);
     for (const region of state.regions) {
         const support = regionalSupport[region.id];
@@ -674,10 +716,20 @@ function computePublicRegionalPolls(state, pollsterId) {
 }
 let cachedFullRegionalVoterPoints;
 let cachedWeeklyRegionalVoterPoints;
+let cachedPrecalibratedV04RegionalVoterPoints;
 let cachedCompactFullRegionalVoterPoints;
 let cachedCompactWeeklyRegionalVoterPoints;
-let cachedRegionalWeights;
-function getRegionalVoterPoints(precision = 'weekly') {
+let cachedCompactPrecalibratedV04RegionalVoterPoints;
+const cachedRegionalWeightsByMode = {};
+function getRegionalVoterPoints(precision = 'weekly', baselineMode = seed_1.DEFAULT_BASELINE_MODE) {
+    if (baselineMode === 'precalibrated-v04') {
+        if (!cachedPrecalibratedV04RegionalVoterPoints) {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { loadClusteredRegionalizedVoterFieldV04 } = require('../simulation/model/voterFieldLoader');
+            cachedPrecalibratedV04RegionalVoterPoints = loadClusteredRegionalizedVoterFieldV04().points;
+        }
+        return cachedPrecalibratedV04RegionalVoterPoints;
+    }
     if (precision === 'full') {
         if (!cachedFullRegionalVoterPoints) {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -694,16 +746,22 @@ function getRegionalVoterPoints(precision = 'weekly') {
     }
     return cachedWeeklyRegionalVoterPoints;
 }
-function getRegionalVoterWeightByRegionId() {
-    if (!cachedRegionalWeights) {
-        cachedRegionalWeights = (0, regionalAggregation_1.aggregateRegionalWeightByGameRegion)(getRegionalVoterPoints('weekly'));
+function getRegionalVoterWeightByRegionId(baselineMode = seed_1.DEFAULT_BASELINE_MODE) {
+    const mode = baselineMode ?? seed_1.DEFAULT_BASELINE_MODE;
+    if (!cachedRegionalWeightsByMode[mode]) {
+        cachedRegionalWeightsByMode[mode] = (0, regionalAggregation_1.aggregateRegionalWeightByGameRegion)(getRegionalVoterPoints('weekly', mode));
     }
-    return cachedRegionalWeights;
+    return cachedRegionalWeightsByMode[mode];
 }
-function getCompactRegionalVoterPoints(precision) {
-    const cached = precision === 'full' ? cachedCompactFullRegionalVoterPoints : cachedCompactWeeklyRegionalVoterPoints;
+function getCompactRegionalVoterPoints(precision, baselineMode = seed_1.DEFAULT_BASELINE_MODE) {
+    const mode = baselineMode ?? seed_1.DEFAULT_BASELINE_MODE;
+    const cached = mode === 'precalibrated-v04'
+        ? cachedCompactPrecalibratedV04RegionalVoterPoints
+        : precision === 'full'
+            ? cachedCompactFullRegionalVoterPoints
+            : cachedCompactWeeklyRegionalVoterPoints;
     if (!cached) {
-        const compactPoints = getRegionalVoterPoints(precision).reduce((points, point) => {
+        const compactPoints = getRegionalVoterPoints(precision, mode).reduce((points, point) => {
             const regionId = regionIdFromKraj(point.geography?.krajId);
             if (!regionId) {
                 return points;
@@ -725,17 +783,23 @@ function getCompactRegionalVoterPoints(precision) {
             });
             return points;
         }, []);
-        if (precision === 'full') {
+        if (mode === 'precalibrated-v04') {
+            cachedCompactPrecalibratedV04RegionalVoterPoints = compactPoints;
+        }
+        else if (precision === 'full') {
             cachedCompactFullRegionalVoterPoints = compactPoints;
         }
         else {
             cachedCompactWeeklyRegionalVoterPoints = compactPoints;
         }
     }
+    if (mode === 'precalibrated-v04') {
+        return cachedCompactPrecalibratedV04RegionalVoterPoints;
+    }
     return precision === 'full' ? cachedCompactFullRegionalVoterPoints : cachedCompactWeeklyRegionalVoterPoints;
 }
 function computeRegionalSupportFromParticles(state, precision, options = {}) {
-    const compactPoints = getCompactRegionalVoterPoints(precision);
+    const compactPoints = getCompactRegionalVoterPoints(precision, state.baselineMode);
     const regionsById = Object.fromEntries(state.regions.map((region) => [region.id, region]));
     const partyContexts = seed_1.partyIds
         .map((partyId) => {
@@ -789,6 +853,8 @@ function computeParticleUtilityForContext(state, context, region, point, options
         ? 0
         : (0, issueEngine_1.issueLayerUtilityModifier)(state.issueLayer, compactPointToSegment(point), partyId === 'player');
     const mediaClusterModifier = partyId === 'player' ? mediaClusterUtilityModifier(state, point) : 0;
+    const regionalBaselineBiasModifier = (0, regionalBaselineBias_1.regionalBaselineBiasUtilityModifier)(partyId, region.id, options.regionalBaselineBias, options.regionalBaselineBiasStrength ?? 0);
+    const partyRegionalPriorModifier = (0, baselineCalibration_1.partyRegionalPriorUtilityModifier)(partyId, region.id, options.partyRegionalPrior ?? state.partyRegionalPrior, options.partyRegionalPriorStrength ?? state.partyRegionalPriorStrength ?? 0);
     const scandalPenalty = state.scandals
         .filter((scandal) => scandal.targetPartyId === partyId && !scandal.resolved)
         .reduce((sum, scandal) => sum + scandal.severity * scandal.virality * scandalSensitivity * 0.18, 0);
@@ -799,7 +865,9 @@ function computeParticleUtilityForContext(state, context, region, point, options
         programModifier -
         fatiguePenalty -
         scandalPenalty +
-        mediaClusterModifier;
+        mediaClusterModifier +
+        regionalBaselineBiasModifier +
+        partyRegionalPriorModifier;
     return Math.max(0.001, Math.exp(logUtility));
 }
 function mediaClusterUtilityModifier(state, point) {
@@ -947,8 +1015,8 @@ function applyAction(state, plannedAction, actionEffects, riskNotes) {
     }
     riskNotes.push('Puvodni typ kampanove akce uz neni podporovan; pouzij V2 plan kampane.');
 }
-function applyMediaInvitations(state, mediaNotes, riskNotes) {
-    for (const invitation of state.mediaInvitations.filter((item) => item.week === state.week && !item.resolved)) {
+function applyMediaInvitations(state, mediaNotes, riskNotes, invitationIds) {
+    for (const invitation of state.mediaInvitations.filter((item) => item.week === state.week && invitationIds.includes(item.id) && !item.resolved)) {
         const outlet = state.media.find((media) => media.id === invitation.outletId);
         mediaNotes.push(`${outlet?.name ?? invitation.outletId} čeká na odpověď (${invitation.format}).`);
         if (invitation.risk > 0.4) {

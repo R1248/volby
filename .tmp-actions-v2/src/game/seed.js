@@ -1,13 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.segmentLabels = exports.defaultRules = exports.coalitionRelations = exports.mediaInvitations = exports.marketingAdvisors = exports.pollsters = exports.questions = exports.events = exports.sponsors = exports.media = exports.parties = exports.regionSeeds = exports.legacyRegionMixes = exports.voterSegments = exports.legacyVoterSegments = exports.baselineTargetShares = exports.partyIds = void 0;
+exports.segmentLabels = exports.defaultRules = exports.coalitionRelations = exports.mediaInvitations = exports.marketingAdvisors = exports.pollsters = exports.questions = exports.events = exports.sponsors = exports.media = exports.parties = exports.regionSeeds = exports.legacyRegionMixes = exports.voterSegments = exports.legacyVoterSegments = exports.DEFAULT_BASELINE_MODE = exports.baselineTargetShares = exports.partyIds = void 0;
 exports.createInitialGameState = createInitialGameState;
 const mediaOutlets_1 = require("../data/mediaOutlets");
 const regions_1 = require("../data/regions");
-const campaignActionsV2_1 = require("./campaignActionsV2");
 const regionalVoteTargets2025_1 = require("./calibration/regionalVoteTargets2025");
+const campaignActionsV2_1 = require("./campaignActionsV2");
 const issueSeed_1 = require("./issueSeed");
-const mediaEngine_1 = require("./mediaEngine");
 const voterSpace_generated_1 = require("./voterSpace.generated");
 exports.partyIds = [
     "player",
@@ -26,6 +25,7 @@ exports.partyIds = [
 // Raw 2025 vote shares, including below-threshold and micro-party votes.
 // SPOLU is split internally by its 2025 mandate ratio: ODS 27, KDU 16, TOP09 9.
 exports.baselineTargetShares = regionalVoteTargets2025_1.nationalPartyVoteTargets2025;
+exports.DEFAULT_BASELINE_MODE = "precalibrated-v04";
 const vec = (econ, culture, authority) => ({
     authority,
     culture,
@@ -1387,12 +1387,12 @@ exports.parties = [
         },
         color: "#607D8B",
         field: partyField({
-            amplitude: 0.14,
-            center: latent8(-0.04, -0.04, 0.04, -0.18, 0.02, 0.02, 0.02),
-            flexibility: 0.7,
-            originCenter: latent8(-0.04, -0.04, 0.04, -0.18, 0.02, 0.02, 0.02),
-            width: latent8(0.86, 0.84, 0.84, 0.82, 0.82, 0.82, 0.82),
-            salience: latent8(0.55, 0.55, 0.55, 0.65, 0.55, 0.55, 0.55),
+            amplitude: 0.16,
+            center: latent8(0.04, 0.12, 0.24, -0.46, -0.08, -0.04, 0.06),
+            flexibility: 0.58,
+            originCenter: latent8(0.04, 0.12, 0.24, -0.46, -0.08, -0.04, 0.06),
+            width: latent8(0.46, 0.44, 0.42, 0.4, 0.48, 0.48, 0.46),
+            salience: latent8(0.95, 1.0, 1.1, 1.15, 0.95, 0.9, 0.95),
         }),
         baselineTargetShare: exports.baselineTargetShares.generace,
         id: "generace",
@@ -1447,16 +1447,17 @@ exports.parties = [
         winProfile: "outsider",
     },
     // Others: aggregate of micro-subjects; included in vote shares but excluded from mandate allocation.
+    // TODO(calibration): replace this temporary niche field with residual allocation outside spatial utility.
     {
         coalitionBase: {},
         color: "#9E9E9E",
         field: partyField({
-            amplitude: 0.22,
-            center: latent8(0, 0, 0, -0.1, 0, 0, 0),
-            flexibility: 0.8,
-            originCenter: latent8(0, 0, 0, -0.1, 0, 0, 0),
-            width: latent8(1.05, 1.05, 1.05, 1.05, 1.05, 1.05, 1.05),
-            salience: latent8(0.25, 0.25, 0.25, 0.3, 0.25, 0.25, 0.25),
+            amplitude: 0.05,
+            center: latent8(-0.08, 0.18, 0.18, -0.42, -0.18, -0.12, -0.1),
+            flexibility: 0.45,
+            originCenter: latent8(-0.08, 0.18, 0.18, -0.42, -0.18, -0.12, -0.1),
+            width: latent8(0.44, 0.46, 0.44, 0.38, 0.46, 0.48, 0.46),
+            salience: latent8(0.95, 0.95, 1.0, 1.15, 0.95, 0.9, 0.95),
         }),
         baselineTargetShare: exports.baselineTargetShares.others,
         id: "others",
@@ -2002,10 +2003,11 @@ const initialRuntime = (party) => {
         thirdPartySpend: 0,
     };
 };
-function createInitialGameState() {
+function createInitialGameState(options = {}) {
     const partyRuntime = Object.fromEntries(exports.parties.map((party) => [party.id, initialRuntime(party)]));
     const initialState = {
         baselineCalibrated: false,
+        baselineMode: options.baselineMode ?? exports.DEFAULT_BASELINE_MODE,
         campaignActionsV2: campaignActionsV2_1.campaignActionsV2,
         coalitionRelations: exports.coalitionRelations,
         events: exports.events,
@@ -2039,7 +2041,6 @@ function createInitialGameState() {
         version: "0.5-campaign-actions-v2",
         week: 4,
     };
-    initialState.mediaInvitations = (0, mediaEngine_1.generateWeeklyMediaInvitations)(initialState, initialState.rngSeed);
     return initialState;
 }
 exports.segmentLabels = Object.fromEntries(exports.voterSegments.map((segment) => [segment.id, segment.name]));

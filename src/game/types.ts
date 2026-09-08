@@ -1,7 +1,10 @@
-import type { RegionId } from '../types/region';
-import type { ActionAvailability, ActionPlacement } from './actions/actionTypes';
-import type { PartyRegionalPriorMap } from './calibration/baselineCalibrationTypes';
-import type { IssueLayerState, ProgramIssueId } from './issueTypes';
+import type { RegionId } from "../types/region";
+import type {
+  ActionAvailability,
+  ActionPlacement,
+} from "./actions/actionTypes";
+import type { PartyRegionalPriorMap } from "./calibration/baselineCalibrationTypes";
+import type { IssueLayerState, ProgramIssueId } from "./issueTypes";
 
 export type Vec3 = {
   authority: number;
@@ -10,13 +13,13 @@ export type Vec3 = {
 };
 
 export type LatentDimension7D =
-  | 'authority'
-  | 'culture'
-  | 'econ'
-  | 'establishment'
-  | 'globalism'
-  | 'green'
-  | 'ukraine';
+  | "authority"
+  | "culture"
+  | "econ"
+  | "establishment"
+  | "globalism"
+  | "green"
+  | "ukraine";
 
 // Compatibility alias while older runtime field names migrate away from "8D".
 export type LatentDimension8D = LatentDimension7D;
@@ -24,36 +27,36 @@ export type LatentVector7D = Record<LatentDimension7D, number>;
 export type LatentVector8D = LatentVector7D;
 
 export type IssueId =
-  | 'housing'
-  | 'transport'
-  | 'security'
-  | 'healthcare'
-  | 'climate'
-  | 'industry'
-  | 'education'
-  | 'greenDeal'
-  | 'taxes';
+  | "housing"
+  | "transport"
+  | "security"
+  | "healthcare"
+  | "climate"
+  | "industry"
+  | "education"
+  | "greenDeal"
+  | "taxes";
 
 export type PartyId =
-  | 'player'
-  | 'ods'
-  | 'stan'
-  | 'pirates'
-  | 'kdu'
-  | 'spd'
-  | 'motorists'
-  | 'top09'
-  | 'stacilo'
-  | 'prisaha'
-  | 'generace'
-  | 'others';
+  | "player"
+  | "ods"
+  | "stan"
+  | "pirates"
+  | "kdu"
+  | "spd"
+  | "motorists"
+  | "top09"
+  | "stacilo"
+  | "prisaha"
+  | "generace"
+  | "others";
 
 export type SegmentId = string;
 
-export type GameMode = 'fullRealism';
-export type BaselineMode = 'legacy-fit-national' | 'precalibrated-v04';
-export type MarketingAdvisorId = 'none' | 'junior' | 'senior' | 'elite';
-export type OfficeRole = 'government' | 'opposition' | 'outsider';
+export type GameMode = "fullRealism";
+export type BaselineMode = "legacy-fit-national" | "precalibrated-v04";
+export type MarketingAdvisorId = "none" | "junior" | "senior" | "elite";
+export type OfficeRole = "government" | "opposition" | "outsider";
 
 export type GameRules = {
   donorCap: number;
@@ -67,7 +70,7 @@ export type GameRules = {
 export type VoterSegment = {
   age4?: string;
   axisSalience: Vec3;
-  education: 'lower' | 'secondary' | 'tertiary';
+  education: "lower" | "secondary" | "tertiary";
   id: SegmentId;
   issuePrefs: Partial<Record<IssueId, number>>;
   issueSalience: Partial<Record<IssueId, number>>;
@@ -161,7 +164,7 @@ export type PartySeed = {
   startingCash: number;
   weeklyLeaderTimeCap?: number;
   weeklyStaffCap: number;
-  winProfile: 'major' | 'mid' | 'small' | 'outsider';
+  winProfile: "major" | "mid" | "small" | "outsider";
 };
 
 export type CoalitionRelation = {
@@ -207,32 +210,32 @@ export type PlannedAction = {
 };
 
 export type CampaignActionCategory =
-  | 'field'
-  | 'ads'
-  | 'media'
-  | 'digital'
-  | 'program'
-  | 'parliament'
-  | 'analytics'
-  | 'organization'
-  | 'coalition'
-  | 'turnout'
-  | 'crisis'
-  | 'negative'
-  | 'ally'
-  | 'grayZone'
-  | 'blackOps';
+  | "field"
+  | "ads"
+  | "media"
+  | "digital"
+  | "program"
+  | "parliament"
+  | "analytics"
+  | "organization"
+  | "coalition"
+  | "turnout"
+  | "crisis"
+  | "negative"
+  | "ally"
+  | "grayZone"
+  | "blackOps";
 
-export type CampaignActionLegality = 'clean' | 'gray' | 'illegal';
+export type CampaignActionLegality = "clean" | "gray" | "illegal";
 
 export type CampaignActionTargetScope =
-  | 'national'
-  | 'region'
-  | 'segment'
-  | 'issue'
-  | 'opponent'
-  | 'mediaOutlet'
-  | 'leader';
+  | "national"
+  | "region"
+  | "segment"
+  | "issue"
+  | "opponent"
+  | "mediaOutlet"
+  | "leader";
 
 export type TargetedModifier = {
   scope: CampaignActionTargetScope;
@@ -253,6 +256,7 @@ export type CampaignActionV2 = {
   availability: ActionAvailability;
   legality: CampaignActionLegality;
   ethicalRisk: number;
+  tags: string[];
 
   cost: number;
   staffCost: number;
@@ -301,7 +305,7 @@ export type CampaignActionV2 = {
 
   preview: {
     visibleToPlayer: boolean;
-    precisionRequired?: 'none' | 'poll' | 'focusGroup' | 'seniorAdvisor';
+    precisionRequired?: "none" | "poll" | "focusGroup" | "seniorAdvisor";
     shortEffectLabel?: string;
     riskLabel?: string;
   };
@@ -311,7 +315,7 @@ export type CampaignTurnoutModifier = {
   actionId: string;
   amount: number;
   expiresWeek: number;
-  kind: 'turnout' | 'demobilization' | 'counterMobilization';
+  kind: "turnout" | "demobilization" | "counterMobilization";
   target: TargetedModifier;
   weekApplied: number;
 };
@@ -326,7 +330,13 @@ export type MediaOutlet = {
   editorialVector: Vec3;
   id: string;
   institutionalTaboo?: number;
-  kind: 'public_tv' | 'commercial_tv' | 'radio' | 'tabloid' | 'digital' | 'regional';
+  kind:
+    | "public_tv"
+    | "commercial_tv"
+    | "radio"
+    | "tabloid"
+    | "digital"
+    | "regional";
   mainstreamLegitimacy?: number;
   nationalConservativeFit?: number;
   preferredFormats?: MediaFormat[];
@@ -336,13 +346,20 @@ export type MediaOutlet = {
   baseReach?: number;
   regionIds?: RegionId[];
   regionFocus?: RegionId[];
-  regionScope?: 'national' | 'regional';
+  regionScope?: "national" | "regional";
   scrutiny: number;
   sensationalism: number;
   topicAffinity?: Partial<Record<ProgramIssueId, number>>;
   toxicity?: number;
   trustByCluster?: Partial<Record<SegmentId, number>>;
-  type?: 'tv' | 'newspaper' | 'podcast' | 'influencer' | 'radio' | 'online' | 'expert';
+  type?:
+    | "tv"
+    | "newspaper"
+    | "podcast"
+    | "influencer"
+    | "radio"
+    | "online"
+    | "expert";
 };
 
 export type MediaPartyOutletFit = {
@@ -357,29 +374,40 @@ export type MediaPartyOutletFit = {
 };
 
 export type MediaFormat =
-  | 'interview'
-  | 'debate'
-  | 'duel'
-  | 'podcast'
-  | 'regional'
-  | 'expertPanel'
-  | 'influencer'
-  | 'crisisInterview';
+  | "interview"
+  | "debate"
+  | "duel"
+  | "podcast"
+  | "regional"
+  | "expertPanel"
+  | "influencer"
+  | "crisisInterview";
 
-export type SpeakerRole = 'leader' | 'expert' | 'regionalFigure' | 'controversialFigure' | 'newFace';
+export type SpeakerRole =
+  | "leader"
+  | "expert"
+  | "regionalFigure"
+  | "controversialFigure"
+  | "newFace";
 
-export type MediaPreparationLevel = 'none' | 'basic' | 'strong';
+export type MediaPreparationLevel = "none" | "basic" | "strong";
 
 export type MediaMiniGameType =
-  | 'three_questions_timed'
-  | 'short_interview'
-  | 'long_form'
-  | 'informal_qna'
-  | 'hostile_interview'
-  | 'soundbite_builder';
+  | "three_questions_timed"
+  | "short_interview"
+  | "long_form"
+  | "informal_qna"
+  | "hostile_interview"
+  | "soundbite_builder";
 
 export type MediaMiniGameAnswer = {
-  answerType?: 'position' | 'explanation' | 'attack' | 'pivot' | 'empathy' | 'technical';
+  answerType?:
+    | "position"
+    | "explanation"
+    | "attack"
+    | "pivot"
+    | "empathy"
+    | "technical";
   bestForSpeakerRoles?: SpeakerRole[];
   beneficiaryGroups?: string[];
   commitmentStrength?: number;
@@ -393,7 +421,18 @@ export type MediaMiniGameAnswer = {
   factValueLabel?: string;
   fiscalCredibilityDelta?: number;
   id: string;
-  impliedAxisPosition?: Partial<Record<'econ' | 'culture' | 'authority' | 'establishment' | 'globalism' | 'green' | 'ukraine', number>>;
+  impliedAxisPosition?: Partial<
+    Record<
+      | "econ"
+      | "culture"
+      | "authority"
+      | "establishment"
+      | "globalism"
+      | "green"
+      | "ukraine",
+      number
+    >
+  >;
   impliedFramingId?: Partial<Record<ProgramIssueId, string>>;
   impliedIssuePosition?: Partial<Record<ProgramIssueId, number>>;
   impliedIssueSalience?: Partial<Record<ProgramIssueId, number>>;
@@ -408,7 +447,13 @@ export type MediaMiniGameAnswer = {
   // Reserved for later richer media scoring; descriptive only today.
   riskyForClusters?: SegmentId[];
   text: string;
-  tone?: 'specific' | 'vague' | 'aggressive' | 'empathetic' | 'technical' | 'evasive';
+  tone?:
+    | "specific"
+    | "vague"
+    | "aggressive"
+    | "empathetic"
+    | "technical"
+    | "evasive";
 };
 
 export type MediaMiniGameQuestion = {
@@ -420,16 +465,16 @@ export type MediaMiniGameQuestion = {
   options: MediaMiniGameAnswer[];
   prompt: string;
   questionKind?:
-    | 'factual_check'
-    | 'axis_probe'
-    | 'issue_position'
-    | 'budget_constraint'
-    | 'distributional_tradeoff'
-    | 'coherence_trap'
-    | 'crisis_defense'
-    | 'program_consistency_check'
-    | 'rhetorical_explanation';
-  severity: 'soft' | 'normal' | 'hard' | 'hostile';
+    | "factual_check"
+    | "axis_probe"
+    | "issue_position"
+    | "budget_constraint"
+    | "distributional_tradeoff"
+    | "coherence_trap"
+    | "crisis_defense"
+    | "program_consistency_check"
+    | "rhetorical_explanation";
+  severity: "soft" | "normal" | "hard" | "hostile";
   timeLimitSec?: number;
   topicId: ProgramIssueId;
 };
@@ -464,7 +509,7 @@ export type MediaInvitation = {
   description?: string;
   expectedReach?: number;
   expiresInWeeks?: number;
-  format: MediaFormat | 'panel' | 'school' | 'press';
+  format: MediaFormat | "panel" | "school" | "press";
   issue: IssueId;
   issueId?: ProgramIssueId;
   miniGameType?: MediaMiniGameType | null;
@@ -473,7 +518,7 @@ export type MediaInvitation = {
   recommendedSpeakerRoles?: SpeakerRole[];
   requiredPreparation?: number;
   resolved: boolean;
-  response?: 'leader' | 'delegate' | 'decline' | 'ignore';
+  response?: "leader" | "delegate" | "decline" | "ignore";
   risk: number;
   title?: string;
   week: number;
@@ -492,7 +537,7 @@ export type VoterCluster = {
 
 export type MediaAppearanceDecision = {
   invitationId: string;
-  action: 'decline' | 'accept';
+  action: "decline" | "accept";
   miniGameResult?: MediaMiniGameResult;
   preparationLevel: MediaPreparationLevel;
   speakerRole?: SpeakerRole;
@@ -529,15 +574,15 @@ export type MediaAppearanceResult = {
   programEffects?: PendingProgramMediaEffect[];
   programWarning?: {
     text: string;
-    type: 'mismatch' | 'commitment';
+    type: "mismatch" | "commitment";
   };
   reputationDelta?: Partial<ReputationVector>;
   sentimentLabel?: string;
   sentimentRating?: MediaSentimentRating;
   sentimentScore?: number;
   sentimentSummary?: string;
-  sentimentStatus?: 'rated' | 'declined';
-  status?: 'pending' | 'applied';
+  sentimentStatus?: "rated" | "declined";
+  status?: "pending" | "applied";
   successScore: number;
   summary: string;
 };
@@ -556,14 +601,14 @@ export type SponsorOffer = {
   donorUnits: number;
   id: string;
   kind:
-    | 'membership_drive'
-    | 'grassroots_bundle'
-    | 'sector_network'
-    | 'regional_patron_network'
-    | 'bank_loan'
-    | 'registered_third_party'
-    | 'opaque_support';
-  legalStatus: 'legal' | 'gray' | 'illegal';
+    | "membership_drive"
+    | "grassroots_bundle"
+    | "sector_network"
+    | "regional_patron_network"
+    | "bank_loan"
+    | "registered_third_party"
+    | "opaque_support";
+  legalStatus: "legal" | "gray" | "illegal";
   name: string;
   policyPressure: Partial<Record<IssueId, number>>;
   regionBonus?: Partial<Record<RegionId, number>>;
@@ -576,18 +621,18 @@ export type EventCard = {
   id: string;
   issueAgendaShift: Partial<Record<IssueId, number>>;
   kind:
-    | 'macro'
-    | 'regional_crisis'
-    | 'parliament_vote'
-    | 'debate'
-    | 'gaffe'
-    | 'protest'
-    | 'investigation'
-    | 'policy_window';
+    | "macro"
+    | "regional_crisis"
+    | "parliament_vote"
+    | "debate"
+    | "gaffe"
+    | "protest"
+    | "investigation"
+    | "policy_window";
   opportunityFor?: PartyId[];
   regionId?: RegionId;
   resolved: boolean;
-  scope: 'national' | 'region';
+  scope: "national" | "region";
   severity: number;
   threatTo?: PartyId[];
   title: string;
@@ -611,7 +656,7 @@ export type QuestionSet = {
   outletId?: string;
   prompt: string;
   resolvedOptionId?: string;
-  trigger: 'debate' | 'interview' | 'school' | 'crisis' | 'press';
+  trigger: "debate" | "interview" | "school" | "crisis" | "press";
   options: QuestionOption[];
 };
 
@@ -661,7 +706,7 @@ export type ScandalState = {
   targetSegments?: Partial<Record<SegmentId, number>>;
   title: string;
   traceability: number;
-  truthStatus: 'false' | 'mixed' | 'true' | 'unknown';
+  truthStatus: "false" | "mixed" | "true" | "unknown";
   severity: number;
   virality: number;
 };
