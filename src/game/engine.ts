@@ -95,7 +95,7 @@ function resolveSupportForCalibration(state: GameState, options?: BaselineSuppor
   };
 }
 
-export function generateWeeklyContext(state: GameState, rngSeed = state.rngSeed) {
+function generateWeeklyContext(state: GameState, rngSeed: number) {
   let nextState = cloneState(state);
   const generatedWeeklyMedia = generateWeeklyMediaInvitations(nextState, rngSeed);
   if (generatedWeeklyMedia.length > 0) {
@@ -131,21 +131,60 @@ export function generateWeeklyContext(state: GameState, rngSeed = state.rngSeed)
   return { contextNotes, events: generatedEvents, invitations: generatedInvitations, state: nextState };
 }
 
-export function resolveTurn(state: GameState, plannedActions: PlannedAction[], rngSeed = state.rngSeed): TurnResult {
+/** Preparation owns all weekly generation. Missing metadata also covers legacy saves. */
+export function prepareWeek(state: GameState, rngSeed = state.preparedWeek?.rngSeed ?? state.rngSeed): GameState {
+  if (state.preparedWeek) {
+    requirePreparedWeek(state);
+    if (state.preparedWeek.rngSeed !== rngSeed) {
+      throw new Error('Cannot change the seed of a prepared week.');
+    }
+    return state;
+  }
+  const baseState = hasComputedSupport(state) ? state : initializeComputedState(state);
+  const context = generateWeeklyContext(baseState, rngSeed);
+  context.state.preparedWeek = {
+    week: state.week,
+    rngSeed,
+    contextNotes: context.contextNotes,
+    eventIds: context.events.map((event) => event.id),
+    invitationIds: context.invitations.map((invitation) => invitation.id),
+  };
+  return context.state;
+}
+
+function requirePreparedWeek(state: GameState) {
+  const prepared = state.preparedWeek;
+  if (!prepared || prepared.week !== state.week) {
+    throw new Error('Current week must be prepared before resolution.');
+  }
+  if (prepared.eventIds.some((id) => !state.events.some((event) => event.id === id && event.week === state.week)) ||
+      prepared.invitationIds.some((id) => !state.mediaInvitations.some((invitation) => invitation.id === id && invitation.week === state.week))) {
+    throw new Error('Prepared week references missing context.');
+  }
+  return prepared;
+}
+
+/** Compatibility entry point for engine scripts; interactive callers use the explicit lifecycle. */
+export function resolveTurn(state: GameState, plannedActions: PlannedAction[], rngSeed = state.preparedWeek?.rngSeed ?? state.rngSeed): TurnResult {
+  return resolvePreparedWeek(prepareWeek(state, rngSeed), plannedActions);
+}
+
+export function resolvePreparedWeek(state: GameState, plannedActions: PlannedAction[]): TurnResult {
+  const prepared = requirePreparedWeek(state);
+  const rngSeed = prepared.rngSeed;
   const beforeState = hasComputedSupport(state) ? cloneState(state) : initializeComputedState(state);
   const nextState = cloneState(beforeState);
-  const context = generateWeeklyContext(nextState, rngSeed);
+  const context = {
+    contextNotes: prepared.contextNotes,
+    events: prepared.eventIds.map((id) => nextState.events.find((event) => event.id === id)!),
+  };
   const actionEffects: string[] = [];
   const mediaNotes: string[] = [];
   const opponentMoves: string[] = [];
   const riskNotes: string[] = [];
 
-  nextState.events = context.state.events;
-  nextState.mediaInvitations = context.state.mediaInvitations;
-  nextState.scandals = context.state.scandals;
-
   applyMarketingAdvisorCost(nextState, riskNotes);
-  applyMediaInvitations(nextState, mediaNotes, riskNotes);
+  applyMediaInvitations(nextState, mediaNotes, riskNotes, prepared.invitationIds);
   applyPendingMediaEffects(nextState, mediaNotes, riskNotes);
 
   for (const plannedAction of plannedActions) {
@@ -161,10 +200,7 @@ export function resolveTurn(state: GameState, plannedActions: PlannedAction[], r
   nextState.week = Math.min(nextState.rules.finalWeek, beforeState.week + 1);
   nextState.rngSeed = nextSeed(rngSeed);
   resetLeaderWeek(nextState);
-  const nextWeekInvitations = generateWeeklyMediaInvitations(nextState, nextState.rngSeed);
-  if (nextWeekInvitations.length > 0) {
-    nextState.mediaInvitations = receiveMediaInvitations(nextState, nextWeekInvitations).mediaInvitations;
-  }
+  delete nextState.preparedWeek;
   nextState.regionalSupport = computeRegionalSupport(nextState);
   nextState.nationalSupport = computeNationalSupport(nextState, nextState.regionalSupport);
   nextState.polls = computePolls(nextState, nextState.nationalSupport).partySupportEstimate ?? nextState.polls;
@@ -1246,8 +1282,8 @@ function applyAction(state: GameState, plannedAction: PlannedAction, actionEffec
   riskNotes.push('Puvodni typ kampanove akce uz neni podporovan; pouzij V2 plan kampane.');
 }
 
-function applyMediaInvitations(state: GameState, mediaNotes: string[], riskNotes: string[]) {
-  for (const invitation of state.mediaInvitations.filter((item) => item.week === state.week && !item.resolved)) {
+function applyMediaInvitations(state: GameState, mediaNotes: string[], riskNotes: string[], invitationIds: string[]) {
+  for (const invitation of state.mediaInvitations.filter((item) => item.week === state.week && invitationIds.includes(item.id) && !item.resolved)) {
     const outlet = state.media.find((media) => media.id === invitation.outletId);
     mediaNotes.push(`${outlet?.name ?? invitation.outletId} čeká na odpověď (${invitation.format}).`);
     if (invitation.risk > 0.4) {

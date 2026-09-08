@@ -696,7 +696,18 @@ export type TurnBriefing = {
   week: number;
 };
 
+// Persist alongside events/invitations in the existing save JSON (no SQL migration).
+// References keep the context small and preserve media responses made during planning.
+export type PreparedWeek = {
+  week: number;
+  rngSeed: number;
+  contextNotes: string[];
+  eventIds: string[];
+  invitationIds: string[];
+};
+
 export type GameState = {
+  preparedWeek?: PreparedWeek;
   baselineCalibrated?: boolean;
   baselineMode?: BaselineMode;
   campaignActionsV2: CampaignActionV2[];

@@ -14,7 +14,8 @@ import {
   receiveMediaInvitations as applyReceiveMediaInvitations,
   respondToMediaAppearance as applyMediaAppearanceDecision,
   respondToMediaInvitation as applyMediaInvitationResponse,
-  resolveTurn,
+  prepareWeek,
+  resolvePreparedWeek,
   updateProgramIssue as applyProgramIssueUpdate,
 } from '@/src/game/engine';
 import { createIssueLayerState } from '@/src/game/issueSeed';
@@ -44,6 +45,7 @@ type GameStore = {
   hydrateGame: () => Promise<void>;
   isHydrated: boolean;
   plannedActions: PlannedAction[];
+  prepareCurrentWeek: () => void;
   planCampaignActionV2: (actionV2Id: string, targetRegionId?: RegionId, targetProgramIssueId?: ProgramIssueId) => boolean;
   removePlannedAction: (plannedActionId: string) => void;
   resetGame: () => void;
@@ -61,7 +63,7 @@ type GameStore = {
   ) => void;
 };
 
-const initialState = initializeComputedState(createInitialGameState());
+const initialState = prepareWeek(initializeComputedState(createInitialGameState()));
 
 function migrateStaffCap(staffCap?: number) {
   if (staffCap === undefined) {
@@ -160,10 +162,10 @@ function createGameWithSelectedParty(selectedPartyId: PartyId) {
     };
   }
 
-  return initializeComputedState(asFullRealismState({
+  return prepareWeek(initializeComputedState(asFullRealismState({
     ...baseState,
     playerPartyId: 'player',
-  }));
+  })));
 }
 
 function plannedCost(state: GameState, plannedActions: PlannedAction[]) {
@@ -244,11 +246,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const loaded = await loadLatestGame();
 
     if (loaded) {
+      const gameState = prepareWeek(initializeComputedState(asFullRealismState(loaded.state)));
       set({
-        gameState: initializeComputedState(asFullRealismState(loaded.state)),
+        gameState,
         isHydrated: true,
         plannedActions: loaded.plannedActions,
       });
+      persist(gameState, loaded.plannedActions);
       return;
     }
 
@@ -257,7 +261,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   isHydrated: false,
   plannedActions: [],
+  prepareCurrentWeek: () => {
+    const { gameState, plannedActions } = get();
+    const preparedState = prepareWeek(gameState);
+    if (preparedState === gameState) return;
+    set({ gameState: preparedState });
+    persist(preparedState, plannedActions);
+  },
   planCampaignActionV2: (actionV2Id, targetRegionId, targetProgramIssueId) => {
+    get().prepareCurrentWeek();
     const { gameState, plannedActions } = get();
     const action = gameState.campaignActionsV2.find((item) => item.id === actionV2Id);
     const runtime = gameState.partyRuntime.player;
@@ -329,8 +341,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     get().respondToInvitation(invitationId, response);
   },
   resolvePlannedWeek: () => {
+    // Existing screens can skip planning (an empty week). The engine remains strict.
+    get().prepareCurrentWeek();
     const { gameState, plannedActions } = get();
-    const result = resolveTurn(gameState, plannedActions);
+    const result = resolvePreparedWeek(gameState, plannedActions);
 
     set({
       gameState: result.state,

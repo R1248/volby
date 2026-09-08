@@ -19,7 +19,7 @@ import { computeRegionalBaselineBias } from '../src/game/calibration/regionalBas
 import { regionalSanityScore } from '../src/game/calibration/regionalSanityCheck';
 import { mediaInvitationTemplates, mediaOutlets } from '../src/data/mediaOutlets';
 import { mediaMiniGameQuestions } from '../src/data/mediaMiniGameQuestions';
-import { calculatePartyOutletFit, mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
+import { generateWeeklyMediaInvitations, calculatePartyOutletFit, mediaSentimentFromResult, resolveMediaAppearance, scoreMediaMiniGameAnswers, selectMediaMiniGameQuestions } from '../src/game/mediaEngine';
 import { createInitialGameState, partyIds } from '../src/game/seed';
 import type { GameState, MediaInvitation, PlannedAction } from '../src/game/types';
 
@@ -71,6 +71,8 @@ function assertHealthyState(state: GameState) {
 }
 
 const baseState = initializeComputedState(createInitialGameState());
+// Legacy fixture with existing invitations; explicit preparation is covered separately.
+baseState.mediaInvitations = generateWeeklyMediaInvitations(baseState);
 assertHealthyState(baseState);
 const baseSeats = estimateSeats(baseState.nationalSupport);
 assert(baseSeats.others === 0, 'Others must never receive seats');

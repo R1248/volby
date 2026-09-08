@@ -5,7 +5,6 @@ import type { RegionId } from "../types/region";
 import { nationalPartyVoteTargets2025 } from "./calibration/regionalVoteTargets2025";
 import { campaignActionsV2 } from "./campaignActionsV2";
 import { createIssueLayerState } from "./issueSeed";
-import { generateWeeklyMediaInvitations } from "./mediaEngine";
 import type {
   BaselineMode,
   CoalitionRelation,
@@ -2196,10 +2195,6 @@ export function createInitialGameState(
     week: 4,
   };
 
-  initialState.mediaInvitations = generateWeeklyMediaInvitations(
-    initialState,
-    initialState.rngSeed,
-  );
   return initialState;
 }
 
