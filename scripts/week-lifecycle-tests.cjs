@@ -354,6 +354,22 @@ async function main() {
   );
   store.getState().removePlannedAction(store.getState().plannedActions[0].id);
   assert.equal(store.getState().planCampaignActionV2(action.id, "praha"), true);
+  store.setState({ gameState: copy(planningBase), plannedActions: [] });
+  const opponentAction = planningBase.campaignActionsV2.find(
+    action => action.target.scope === "opponent",
+  );
+  assert(opponentAction, "need an opponent-target action");
+  const opponentId = planningBase.parties.find(party => party.id !== "player").id;
+  assert.equal(
+    store.getState().planCampaignActionV2(opponentAction.id, undefined, undefined, opponentId),
+    true,
+  );
+  assert.equal(store.getState().plannedActions[0].targetPartyId, opponentId);
+  assert.equal(
+    saved.plannedActions[0].targetPartyId,
+    opponentId,
+    "opponent target survives persistence",
+  );
   console.log(
     "Week lifecycle and store tests passed (including all six planning constraints).",
   );

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { GameScreen } from '@/src/components/layout/GameScreen';
-import { ActionButton, Card, Grid, Metric, SectionTitle } from '@/src/components/ui/StrategyCards';
+import { Card, Grid, Metric, SectionTitle } from '@/src/components/ui/StrategyCards';
 import { formatPercent } from '@/src/game/engine';
 import { useGameStore } from '@/src/store/useGameStore';
 import { colors } from '@/src/theme/colors';
@@ -9,7 +9,6 @@ import { colors } from '@/src/theme/colors';
 export default function BriefingScreen() {
   const gameState = useGameStore((state) => state.gameState);
   const plannedActions = useGameStore((state) => state.plannedActions);
-  const resolvePlannedWeek = useGameStore((state) => state.resolvePlannedWeek);
   const briefing = gameState.history[0];
   const playerRuntime = gameState.partyRuntime.player;
 
@@ -36,16 +35,11 @@ export default function BriefingScreen() {
       <Card tone="dark">
         <View style={styles.row}>
           <View style={styles.flex}>
-            <Text style={styles.darkTitle}>Rozhodnutí týdne</Text>
+            <Text style={styles.darkTitle}>Debrief posledního týdne</Text>
             <Text style={styles.darkText}>
               Akce mění organizaci, reputaci, šířku pole, issue ownership a viditelnost. Veřejnoprávní průzkum se přepočítá na konci tahu.
             </Text>
           </View>
-          <ActionButton
-            label="Odehrát týden"
-            onPress={resolvePlannedWeek}
-            tone="accent"
-          />
         </View>
       </Card>
 

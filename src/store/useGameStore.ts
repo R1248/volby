@@ -59,6 +59,7 @@ type GameStore = {
     actionV2Id: string,
     targetRegionId?: RegionId,
     targetProgramIssueId?: ProgramIssueId,
+    targetPartyId?: PartyId,
   ) => boolean;
   removePlannedAction: (plannedActionId: string) => void;
   resetGame: () => void;
@@ -340,7 +341,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ gameState: preparedState });
     persist(preparedState, plannedActions);
   },
-  planCampaignActionV2: (actionV2Id, targetRegionId, targetProgramIssueId) => {
+  planCampaignActionV2: (
+    actionV2Id,
+    targetRegionId,
+    targetProgramIssueId,
+    targetPartyId,
+  ) => {
     get().prepareCurrentWeek();
     const { gameState, plannedActions } = get();
     const action = gameState.campaignActionsV2.find(
@@ -407,6 +413,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         targetProgramIssueId:
           action.target.scope === "issue" ? targetProgramIssueId : undefined,
         targetRegionId,
+        targetPartyId,
       },
     ];
 
